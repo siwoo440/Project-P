@@ -121,6 +121,34 @@ namespace ProjectP.Tests.EditMode
         }
 
         [Test]
+        public void SpecialGem_FallsWithItsFlag_AndRefillIsNormal()
+        {
+            // 9일차: 특수 보석 표시는 보석과 함께 떨어지고, 새로 채운 보석은 일반 보석이다.
+            var board = PatternBoard();
+            board.SetSpecial(P(3, 2), true);
+            board.SetSpecial(P(5, 2), true); // 맨 위 칸 — 사용해서 없앤다
+
+            BoardGravity.Collapse(board, new[] { P(0, 2), P(1, 2), P(5, 2) }, SpawnAlways(GemType.Heal));
+
+            Assert.IsTrue(board.IsSpecial(P(1, 2)), "행 3의 특수 보석이 두 칸 내려옴");
+            Assert.AreEqual(GemType.Chaos, board[P(1, 2)]);
+            Assert.IsFalse(board.IsSpecial(P(3, 2)), "떠난 자리는 일반 보석");
+            for (var row = 3; row < Rows; row++) Assert.IsFalse(board.IsSpecial(P(row, 2)), $"새로 채운 {row}행");
+            Assert.AreEqual(1, board.SpecialCount);
+        }
+
+        [Test]
+        public void Board_StartsWithoutSpecialGems_AndKeepsFlagWhenTypeChanges()
+        {
+            var board = PatternBoard();
+            Assert.AreEqual(0, board.SpecialCount);
+
+            board.SetSpecial(P(0, 0), true);
+            board[P(0, 0)] = GemType.Magic;
+            Assert.AreEqual(new PathGem(GemType.Magic, true), board.GetPathGem(P(0, 0)));
+        }
+
+        [Test]
         public void InvalidRemoval_IsRejected()
         {
             var board = PatternBoard();

@@ -87,7 +87,7 @@ namespace ProjectP.Dev
         private void Refresh(Board board)
         {
             seedText.text = puzzle.Seed.ToString();
-            summaryText.text = $"{board.Rows} × {board.Columns} · {board.CellCount}칸";
+            summaryText.text = $"{board.Rows} × {board.Columns} · {board.CellCount}칸 · 특수 {board.SpecialCount}";
 
             for (var i = 0; i < statTypes.Length && i < statTexts.Length; i++)
             {
@@ -128,6 +128,8 @@ namespace ProjectP.Dev
             if (summary.Heal > 0) parts.Add($"<color=#50DC96>회복 {summary.Heal}</color>");
             if (summary.Delay > 0) parts.Add($"<color=#B496FF>지연+{summary.Delay}</color>");
             if (summary.NextTurnActionPoints > 0) parts.Add($"<color=#4FC3F7>행동력+{summary.NextTurnActionPoints}</color>");
+            if (summary.ComboCount > 0) parts.Add($"<color=#F2C14E>연속 강화 {summary.ComboCount}</color>");
+            if (summary.CreatedSpecial.HasValue) parts.Add("<color=#F2C14E>특수 생성</color>");
 
             AddLog($"{pendingPath} → {(parts.Count > 0 ? string.Join(" · ", parts) : "효과 없음")}");
             pendingPath = null;
@@ -155,7 +157,8 @@ namespace ProjectP.Dev
                 var gem = puzzle.GetGem(position);
                 var letter = gem != null && !string.IsNullOrEmpty(gem.DisplayName) ? gem.DisplayName.Substring(0, 1) : "?";
                 var color = gem != null ? ColorUtility.ToHtmlStringRGB(gem.Color) : "FF00FF";
-                builder.Append($"<color=#{color}>{letter}</color>");
+                // 특수 보석은 밑줄로 구분한다.
+                builder.Append(puzzle.Board.IsSpecial(position) ? $"<color=#{color}><u>{letter}</u></color>" : $"<color=#{color}>{letter}</color>");
             }
 
             return builder.ToString();

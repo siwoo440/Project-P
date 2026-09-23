@@ -24,16 +24,28 @@ namespace ProjectP.Gameplay.Puzzle
         [SerializeField] private RectTransform countBadge;
         [SerializeField] private TMP_Text countText;
 
+        [Header("칸별 배율 표시 (9일차)")]
+        [Tooltip("연결한 칸 오른쪽 아래에 붙는 ×1.2 표시의 바탕")]
+        [SerializeField] private Sprite tagSprite;
+        [SerializeField] private Color tagColor = new Color32(26, 31, 51, 235);
+        [SerializeField] private Color tagTextColor = new Color32(242, 193, 78, 255);
+        [Tooltip("연속 강화가 터지는 칸(4연속째)")]
+        [SerializeField] private Color comboTagColor = new Color32(79, 195, 247, 255);
+        [SerializeField] private Vector2 tagOffset = new Vector2(26f, -32f);
+
         private readonly List<Image> segments = new List<Image>();
         private readonly List<Image> dots = new List<Image>();
+        private readonly List<(Image body, TMP_Text label)> tags = new List<(Image, TMP_Text)>();
         private RectTransform segmentLayer;
         private RectTransform dotLayer;
+        private RectTransform tagLayer;
 
         private void Awake()
         {
-            // 선이 점을 덮지 않도록 층을 나눈다: 선 → 점 → 개수 표시.
+            // 선이 점을 덮지 않도록 층을 나눈다: 선 → 점 → 칸별 배율 → 개수 표시.
             segmentLayer = CreateLayer("Segments");
             dotLayer = CreateLayer("Dots");
+            tagLayer = CreateLayer("Tags");
         }
 
         private void OnEnable()
@@ -71,6 +83,7 @@ namespace ProjectP.Gameplay.Puzzle
             boardView.SetSelection(System.Array.Empty<BoardPosition>());
             foreach (var segment in segments) segment.enabled = false;
             foreach (var dot in dots) dot.enabled = false;
+            foreach (var tag in tags) tag.body.gameObject.SetActive(false);
             countBadge.gameObject.SetActive(false);
         }
 
@@ -113,6 +126,76 @@ namespace ProjectP.Gameplay.Puzzle
             countBadge.SetAsLastSibling();
             countBadge.anchoredPosition = points[points.Length - 1] + new Vector2(44f, 44f);
             countText.text = $"{positions.Count}개";
+
+            DrawTags(positions, points);
+        }
+
+        /// <summary>
+        /// 칸별 배율 표시(사용자 요청): 같은 종류 2번째부터 그 칸이 받는 연속 배율(×1.2 · ×1.4 …)을 칸 오른쪽 아래에 붙인다.
+        /// 연속 강화가 터지는 칸(4연속째)은 다른 색, 특수 보석 칸은 "특수"로 표시한다. 배율 1.0인 칸은 표시하지 않는다.
+        /// </summary>
+        private void DrawTags(IReadOnlyList<BoardPosition> positions, Vector2[] points)
+        {
+            var preview = puzzle.PreviewEffects();
+            var comboAt = new HashSet<int>();
+            if (preview != null)
+            {
+                foreach (var effect in preview.Events)
+                {
+                    if (effect.Source == EffectSource.Combo) comboAt.Add(effect.Index);
+                }
+            }
+
+            var used = 0;
+            for (var i = 0; i < positions.Count; i++)
+            {
+                string text;
+                if (puzzle.Board.IsSpecial(positions[i])) text = "특수";
+                else if (preview != null && i < preview.ChainMultipliers.Count && preview.ChainMultipliers[i] > 1.001f) text = $"×{preview.ChainMultipliers[i]:0.0}";
+                else continue;
+
+                var (body, label) = GetTag(used++);
+                body.rectTransform.anchoredPosition = points[i] + tagOffset;
+                label.text = text;
+                label.color = comboAt.Contains(i) ? comboTagColor : tagTextColor;
+                body.gameObject.SetActive(true);
+            }
+
+            for (var i = used; i < tags.Count; i++) tags[i].body.gameObject.SetActive(false);
+        }
+
+        private (Image body, TMP_Text label) GetTag(int index)
+        {
+            while (tags.Count <= index)
+            {
+                var go = new GameObject($"Tag {tags.Count}", typeof(RectTransform), typeof(Image));
+                go.transform.SetParent(tagLayer, false);
+                var body = go.GetComponent<Image>();
+                body.sprite = tagSprite;
+                body.type = Image.Type.Sliced;
+                body.pixelsPerUnitMultiplier = 2f;
+                body.color = tagColor;
+                body.raycastTarget = false;
+                body.rectTransform.sizeDelta = new Vector2(58f, 28f);
+
+                var textObject = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
+                textObject.transform.SetParent(go.transform, false);
+                var rect = (RectTransform)textObject.transform;
+                rect.anchorMin = Vector2.zero;
+                rect.anchorMax = Vector2.one;
+                rect.offsetMin = Vector2.zero;
+                rect.offsetMax = Vector2.zero;
+
+                var label = textObject.GetComponent<TextMeshProUGUI>();
+                label.fontSize = 19f;
+                label.fontStyle = FontStyles.Bold;
+                label.alignment = TextAlignmentOptions.Center;
+                label.raycastTarget = false;
+
+                tags.Add((body, label));
+            }
+
+            return tags[index];
         }
 
         private RectTransform CreateLayer(string layerName)

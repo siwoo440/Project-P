@@ -15,7 +15,7 @@ namespace ProjectP.Gameplay.Puzzle
     ///   턴 시작(행동력 계산) → 드래그로 경로 작성(행동력만큼) → 놓기
     ///   ├ 취소 영역에서 놓기 / 우클릭·ESC → 취소, 턴 유지
     ///   ├ 2개 미만으로 놓기 → 효과 없이 턴 소모
-    ///   └ 2개 이상으로 놓기 → 보석 제거·낙하·보충 → 턴 소모
+    ///   └ 2개 이상으로 놓기 → 효과 계산(연속 배율·연속 강화) → 보석 제거·낙하·보충(5연속이면 마지막 칸에 특수 보석) → 턴 소모
     ///   → (자동 다음 턴이면) 다음 턴 시작
     /// 실제 게임에서 다음 턴은 13일차 TurnManager가 적 행동 뒤에 시작한다.
     /// </summary>
@@ -40,6 +40,9 @@ namespace ProjectP.Gameplay.Puzzle
         /// </summary>
         public CombatStats Stats { get; set; }
         public int Seed { get; private set; }
+
+        /// <summary>동일 종류 연속·연속 강화·특수 보석 수치(PuzzleConfig). 시작 전에는 null.</summary>
+        public ChainSettings Chain => effectSettings?.Chain;
 
         /// <summary>현재 그리고 있는 연결 경로 (읽기 전용).</summary>
         public IReadOnlyList<BoardPosition> Connection => path?.Positions ?? (IReadOnlyList<BoardPosition>)Array.Empty<BoardPosition>();
@@ -106,9 +109,20 @@ namespace ProjectP.Gameplay.Puzzle
             generator = new BoardGenerator(database.Gems.Where(gem => gem != null).Select(gem => (gem.Type, gem.SpawnWeight)));
 
             var config = database.Puzzle;
+            var chain = new ChainSettings(
+                config.ChainBonusPerGem, config.ComboLength, config.ComboDamageRatio, config.ComboHealRatio,
+                config.ComboDelay, config.ComboActionPoints, config.SpecialLength,
+                new Dictionary<GemType, float>
+                {
+                    { GemType.Physical, config.SpecialPhysicalPower },
+                    { GemType.Magic, config.SpecialMagicPower },
+                    { GemType.Heal, config.SpecialHealPower },
+                    { GemType.Chaos, config.SpecialChaosDelay },
+                    { GemType.Balance, config.SpecialBalanceActionPoints }
+                });
             effectSettings = new GemEffectSettings(
                 database.Gems.Where(gem => gem != null).ToDictionary(gem => gem.Type, gem => gem.EffectCoefficient),
-                config.ChaosDelayPerGem, config.MaxChaosDelay, config.BalanceActionPointsPerGem, config.MaxNextTurnActionPoints);
+                config.ChaosDelayPerGem, config.MaxChaosDelay, config.BalanceActionPointsPerGem, config.MaxNextTurnActionPoints, chain);
             Regenerate();
         }
 
@@ -197,8 +211,8 @@ namespace ProjectP.Gameplay.Puzzle
                     path.TryConfirm(out var confirmed);
                     turn.MarkActed();
                     ConnectionConfirmed?.Invoke(confirmed);
-                    ApplyEffects(confirmed);
-                    Resolve(confirmed);
+                    var summary = ApplyEffects(confirmed);
+                    Resolve(confirmed, summary.CreatedSpecial);
                     break;
             }
         }
@@ -216,28 +230,65 @@ namespace ProjectP.Gameplay.Puzzle
         /// 사용한 보석의 효과를 연결 순서대로 계산해 알린다(기획서 5.5). 보석이 사라지기 전에 종류를 읽어야 한다.
         /// 균형 보석의 다음 턴 행동력은 여기서 바로 반영한다.
         /// </summary>
-        private void ApplyEffects(IReadOnlyList<BoardPosition> used)
+        private EffectSummary ApplyEffects(IReadOnlyList<BoardPosition> used)
         {
-            var gems = used.Select(position => Board[position]).ToList();
-            var summary = GemEffectResolver.Resolve(gems, Stats, effectSettings);
+            var summary = Evaluate(used);
 
             if (summary.NextTurnActionPoints > 0) turn.ActionPoints.AddNextTurnBonus(summary.NextTurnActionPoints);
             EffectsResolved?.Invoke(summary);
+            return summary;
         }
 
-        /// <summary>사용한 보석을 없애고 남은 보석을 내린 뒤 위에서 새 보석을 채운다. 기획서 5.1</summary>
-        private void Resolve(IReadOnlyList<BoardPosition> used)
+        /// <summary>
+        /// 지금 그리는 경로를 놓으면 나올 효과(연속 배율·연속 강화·특수 보석 생성 포함). 경로가 없으면 null.
+        /// 드래그 중 실시간 표시(ConnectionView·ConnectionPreviewView)가 쓴다. 적의 HP·처치 여부는 모르므로 대상 적용 전 값이다.
+        /// </summary>
+        public EffectSummary PreviewEffects() =>
+            path != null && path.IsActive && path.Count > 0 && effectSettings != null ? Evaluate(path.Positions) : null;
+
+        private EffectSummary Evaluate(IReadOnlyList<BoardPosition> positions) =>
+            GemEffectResolver.Resolve(positions.Select(Board.GetPathGem).ToList(), Stats, effectSettings);
+
+        /// <summary>
+        /// 사용한 보석을 없애고 남은 보석을 내린 뒤 위에서 새 보석을 채운다. 기획서 5.1
+        /// 5연속 이상이면 경로 마지막 칸은 없애지 않고 그 종류의 특수 보석으로 바꾼다(기획서 5.6). 특수 보석도 아래로 떨어진다.
+        /// </summary>
+        private void Resolve(IReadOnlyList<BoardPosition> used, GemType? createdSpecial)
         {
             IsResolving = true;
             TurnStateChanged?.Invoke();
 
-            var drops = BoardGravity.Collapse(Board, used, () => generator.Pick(refillRandom));
-            boardView.PlayResolve(used, drops, Board, database.GetGem, () =>
+            var removed = used;
+            BoardPosition? created = null;
+            if (createdSpecial.HasValue)
+            {
+                var last = used[used.Count - 1];
+                removed = used.Take(used.Count - 1).ToList();
+                Board[last] = createdSpecial.Value;
+                Board.SetSpecial(last, true);
+                created = last;
+            }
+
+            var drops = BoardGravity.Collapse(Board, removed, () => generator.Pick(refillRandom));
+            if (created.HasValue) created = LandingOf(created.Value, drops);
+
+            boardView.PlayResolve(removed, drops, Board, database.GetGem, created, () =>
             {
                 IsResolving = false;
                 BoardChanged?.Invoke(Board);
                 FinishAction();
             });
+        }
+
+        /// <summary>낙하 뒤 그 보석이 도착한 칸. 움직이지 않았으면 제자리.</summary>
+        private static BoardPosition LandingOf(BoardPosition from, IEnumerable<GemDrop> drops)
+        {
+            foreach (var drop in drops)
+            {
+                if (!drop.Spawned && drop.To.Column == from.Column && drop.FromRow == from.Row) return drop.To;
+            }
+
+            return from;
         }
 
         private void FinishAction()

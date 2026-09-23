@@ -15,6 +15,7 @@ namespace ProjectP.Gameplay.Puzzle
     /// - 연결 선택 강조 (ConnectionView가 호출)
     /// - 사용한 보석 제거 → 남은 보석 낙하 → 새 보석이 위에서 떨어짐 (PuzzleManager가 호출)
     /// - 턴을 쓴 뒤 다음 턴 대기 상태면 보드를 어둡게
+    /// - 특수 보석(9일차)은 금색 테두리와 은은하게 숨 쉬는 번짐으로 구분하고, 생길 때 한 번 튀어 오른다
     /// 칸 오브젝트는 제자리에 두고 내용만 바꾼 뒤, 떨어져 온 거리만큼 위에서 출발시켜 낙하를 표현한다.
     /// 보드 밖에서 출발하는 새 보석은 보드 영역 마스크(RectMask2D)로 가린다.
     /// </summary>
@@ -26,11 +27,16 @@ namespace ProjectP.Gameplay.Puzzle
         private const float FallPerRowDuration = 0.05f;
         private const float LandDuration = 0.08f;
         private const float LockedAlpha = 0.55f;
+        private const float BirthDuration = 0.32f;
+        private const float PulseSpeed = 3f;
 
         [SerializeField] private RectTransform cellRoot;
         [SerializeField] private Sprite tileSprite;
         [SerializeField] private Sprite outlineSprite;
         [SerializeField] private Sprite shadowSprite;
+        [Tooltip("특수 보석 뒤에 깔리는 번짐. 기획서 5.6")]
+        [SerializeField] private Sprite glowSprite;
+        [SerializeField] private Color specialColor = new Color32(242, 193, 78, 255);
         [SerializeField] private float cellSize = 92f;
         [SerializeField] private float spacing = 4f;
         [SerializeField, Range(0.3f, 0.9f)] private float iconScale = 0.58f;
@@ -58,13 +64,25 @@ namespace ProjectP.Gameplay.Puzzle
             StopAllCoroutines();
             if (Layout == null || Layout.Rows != board.Rows || Layout.Columns != board.Columns) Rebuild(board.Rows, board.Columns);
 
+            ShowAll(board, gemLookup);
+            SetSelection(Array.Empty<BoardPosition>());
+        }
+
+        private void ShowAll(Board board, Func<GemType, GemData> gemLookup)
+        {
             for (var i = 0; i < cells.Count; i++)
             {
+                var position = board.FromIndex(i);
                 cells[i].ResetMotion();
-                cells[i].Show(gemLookup(board[board.FromIndex(i)]));
+                cells[i].Show(gemLookup(board[position]), board.IsSpecial(position));
             }
+        }
 
-            SetSelection(Array.Empty<BoardPosition>());
+        // 특수 보석 번짐이 천천히 밝아졌다 어두워진다.
+        private void Update()
+        {
+            var pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * PulseSpeed);
+            foreach (var cell in cells) cell.Pulse(pulse);
         }
 
         /// <summary>칸 중심 위치 (cellRoot 기준 로컬 좌표).</summary>
@@ -90,15 +108,16 @@ namespace ProjectP.Gameplay.Puzzle
         /// <summary>
         /// 사용한 보석을 터뜨리고, 바뀐 보드(board)대로 보석을 떨어뜨린다. 끝나면 onComplete를 부른다.
         /// board는 BoardGravity.Collapse가 이미 바꿔 놓은 상태여야 한다.
+        /// createdSpecial: 이번에 생긴 특수 보석의 도착 칸. 착지 뒤 한 번 튀어 오른다.
         /// </summary>
         public void PlayResolve(IReadOnlyList<BoardPosition> removed, IReadOnlyList<GemDrop> drops, Board board,
-            Func<GemType, GemData> gemLookup, Action onComplete)
+            Func<GemType, GemData> gemLookup, BoardPosition? createdSpecial, Action onComplete)
         {
-            StartCoroutine(ResolveRoutine(removed, drops, board, gemLookup, onComplete));
+            StartCoroutine(ResolveRoutine(removed, drops, board, gemLookup, createdSpecial, onComplete));
         }
 
         private IEnumerator ResolveRoutine(IReadOnlyList<BoardPosition> removed, IReadOnlyList<GemDrop> drops, Board board,
-            Func<GemType, GemData> gemLookup, Action onComplete)
+            Func<GemType, GemData> gemLookup, BoardPosition? createdSpecial, Action onComplete)
         {
             // 1) 사용한 보석: 하얗게 번쩍이며 부풀었다가 사라진다.
             var popped = new List<CellView>();
@@ -113,11 +132,7 @@ namespace ProjectP.Gameplay.Puzzle
             }
 
             // 2) 바뀐 보드 내용을 칸에 채우고, 움직인 칸은 출발 위치에서 떨어뜨린다.
-            for (var i = 0; i < cells.Count; i++)
-            {
-                cells[i].ResetMotion();
-                cells[i].Show(gemLookup(board[board.FromIndex(i)]));
-            }
+            ShowAll(board, gemLookup);
 
             var falling = new List<(CellView cell, float height, float duration)>();
             var longest = 0f;
@@ -148,6 +163,22 @@ namespace ProjectP.Gameplay.Puzzle
             }
 
             foreach (var cell in cells) cell.ResetMotion();
+
+            // 3) 새 특수 보석: 하얗게 번쩍이며 한 번 튀어 오른다.
+            if (createdSpecial.HasValue)
+            {
+                var born = cells[ToIndex(createdSpecial.Value)];
+                born.Root.transform.SetAsLastSibling();
+                for (var time = 0f; time < BirthDuration; time += Time.unscaledDeltaTime)
+                {
+                    var t = time / BirthDuration;
+                    born.SetPop(1f + 0.3f * Mathf.Sin(t * Mathf.PI), 0.9f * (1f - t));
+                    yield return null;
+                }
+
+                born.ResetMotion();
+            }
+
             onComplete?.Invoke();
         }
 
@@ -185,12 +216,21 @@ namespace ProjectP.Gameplay.Puzzle
             Stretch(shadow.rectTransform, cellSize * 0.17f);
             shadow.rectTransform.anchoredPosition = new Vector2(0f, -4f);
 
+            // 특수 보석 표시: 타일 뒤 번짐 + 타일 위 금색 테두리. 일반 보석이면 꺼 둔다.
+            var glow = CreateImage("SpecialGlow", rect, glowSprite, specialColor);
+            Stretch(glow.rectTransform, cellSize * 0.18f); // 칸 간격이 좁아 이웃 칸에 덜 가리도록 조금만 넘친다
+            glow.enabled = false;
+
             var tile = CreateImage("Tile", rect, tileSprite, Color.white);
             Stretch(tile.rectTransform, 0f);
 
             var icon = CreateImage("Icon", rect, null, Color.white);
             icon.preserveAspect = true;
             icon.rectTransform.sizeDelta = new Vector2(cellSize * iconScale, cellSize * iconScale);
+
+            var ring = CreateImage("SpecialRing", rect, outlineSprite, specialColor);
+            Stretch(ring.rectTransform, -2f);
+            ring.enabled = false;
 
             var flash = CreateImage("Flash", rect, tileSprite, new Color(1f, 1f, 1f, 0f));
             Stretch(flash.rectTransform, 0f);
@@ -199,7 +239,7 @@ namespace ProjectP.Gameplay.Puzzle
             Stretch(outline.rectTransform, 3f);
             outline.enabled = false;
 
-            return new CellView(rect, home, tile, icon, flash, outline);
+            return new CellView(rect, home, tile, icon, flash, outline, glow, ring, specialColor);
         }
 
         private static Image CreateImage(string imageName, RectTransform parent, Sprite sprite, Color color)
@@ -229,8 +269,12 @@ namespace ProjectP.Gameplay.Puzzle
             private readonly Image icon;
             private readonly Image flash;
             private readonly Image outline;
+            private readonly Image specialGlow;
+            private readonly Image specialRing;
+            private readonly Color specialColor;
 
-            public CellView(RectTransform rect, Vector2 home, Image tile, Image icon, Image flash, Image outline)
+            public CellView(RectTransform rect, Vector2 home, Image tile, Image icon, Image flash, Image outline,
+                Image specialGlow, Image specialRing, Color specialColor)
             {
                 this.rect = rect;
                 this.home = home;
@@ -238,12 +282,18 @@ namespace ProjectP.Gameplay.Puzzle
                 this.icon = icon;
                 this.flash = flash;
                 this.outline = outline;
+                this.specialGlow = specialGlow;
+                this.specialRing = specialRing;
+                this.specialColor = specialColor;
             }
 
             public GameObject Root => rect.gameObject;
 
-            public void Show(GemData gem)
+            public void Show(GemData gem, bool isSpecial)
             {
+                specialGlow.enabled = isSpecial && specialGlow.sprite != null;
+                specialRing.enabled = isSpecial;
+
                 if (gem == null)
                 {
                     // 정의가 없는 보석은 눈에 띄게 표시해 데이터 누락을 바로 알 수 있게 한다.
@@ -256,6 +306,15 @@ namespace ProjectP.Gameplay.Puzzle
                 icon.sprite = gem.Icon;
                 icon.color = gem.IconColor;
                 icon.enabled = gem.Icon != null;
+            }
+
+            /// <summary>특수 보석 번짐 밝기. pulse는 0~1.</summary>
+            public void Pulse(float pulse)
+            {
+                if (!specialRing.enabled) return;
+
+                specialGlow.color = new Color(specialColor.r, specialColor.g, specialColor.b, 0.35f + 0.45f * pulse);
+                specialRing.color = new Color(specialColor.r, specialColor.g, specialColor.b, 0.75f + 0.25f * pulse);
             }
 
             public void SetSelected(bool isSelected)

@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using ProjectP.Data;
 using ProjectP.Gameplay.Battle;
 using ProjectP.Gameplay.Puzzle;
 using TMPro;
@@ -14,6 +15,7 @@ namespace ProjectP.Dev
     /// - 허수아비는 여러 마리다. 클릭한 허수아비가 공격 대상이 된다(기획서 6.3).
     /// - 대상이 쓰러지면 살아 있는 허수아비 중 무작위로 대상을 바꾼다(사용자 결정). 규칙은 TargetSelection이 맡는다.
     /// - 효과는 연결 순서대로 하나씩, 짧은 간격을 두고 적용한다(기획서 5.5). 도중에 대상이 쓰러지면 남은 효과는 새 대상에게 간다.
+    /// - 모든 적 대상 효과(마법·혼돈 특수 보석)는 살아 있는 허수아비 전원에게 준다. 연속 강화·특수 보석은 이름을 붙여 크게 띄운다.
     /// - 허수아비는 턴마다 행동 카운트가 1씩 줄고 0이 되면 "행동!" 후 기본값으로 돌아간다(기획서 6.4 흉내). 공격은 하지 않는다.
     /// - 이 컴포넌트가 가진 HP·카운트는 개발용 임시 상태다. 실제 게임에서는 BattleManager가 결과표를 적용한다.
     /// </summary>
@@ -21,6 +23,8 @@ namespace ProjectP.Dev
     {
         private const int StatStep = 1;
         private const int HurtAmount = 20;
+        private const float NormalFloatSize = 34f;
+        private const float BigFloatSize = 44f;
 
         [SerializeField] private PuzzleManager puzzle;
 
@@ -173,24 +177,33 @@ namespace ProjectP.Dev
         {
             foreach (var effect in summary.Events)
             {
+                // 연속 강화·특수 보석은 이름을 붙여 크게 띄운다.
+                var prefix = effect.Source == EffectSource.Combo
+                    ? effect.Gem == GemType.Balance ? "4연속 " : $"{ConnectionPreviewView.ComboName(effect.Gem)} "
+                    : effect.Source == EffectSource.Special ? "특수 "
+                    : "";
+                var size = effect.Source == EffectSource.Gem ? NormalFloatSize : BigFloatSize;
+
                 switch (effect.Kind)
                 {
                     case GemEffectKind.PhysicalDamage:
                     case GemEffectKind.MagicDamage:
-                        HitTarget(effect.Amount);
+                        if (effect.Target == EffectTarget.AllEnemies) HitAll(effect.Amount, prefix, size);
+                        else HitTarget(effect.Amount, prefix, size);
                         break;
 
                     case GemEffectKind.Heal:
                         mainHp = Mathf.Min(mainMaxHp, mainHp + effect.Amount);
-                        Float(mainFloatAnchor, $"+{effect.Amount}", healColor);
+                        Float(mainFloatAnchor, $"{prefix}+{effect.Amount}", healColor, size);
                         break;
 
                     case GemEffectKind.Delay:
-                        DelayTarget(effect.Amount);
+                        if (effect.Target == EffectTarget.AllEnemies) DelayAll(effect.Amount, prefix, size);
+                        else DelayTarget(effect.Amount, prefix, size);
                         break;
 
                     case GemEffectKind.NextTurnActionPoints:
-                        Float(mainFloatAnchor, effect.Amount > 0 ? $"다음 턴 행동력 +{effect.Amount}" : "행동력 상한", actionPointColor);
+                        Float(mainFloatAnchor, effect.Amount > 0 ? $"{prefix}다음 턴 행동력 +{effect.Amount}" : "행동력 상한", actionPointColor, size);
                         break;
                 }
 
@@ -200,7 +213,7 @@ namespace ProjectP.Dev
         }
 
         /// <summary>현재 대상에게 피해. 쓰러뜨리면 대상이 무작위로 바뀌고, 남은 효과는 새 대상에게 간다.</summary>
-        private void HitTarget(int amount)
+        private void HitTarget(int amount, string prefix, float size)
         {
             var target = targets.Current;
             if (target < 0)
@@ -209,28 +222,60 @@ namespace ProjectP.Dev
                 return;
             }
 
-            dummyHp[target] = Mathf.Max(0, dummyHp[target] - amount);
-            Float(dummyHpFills[target], amount.ToString(), damageColor);
-
-            if (dummyHp[target] > 0) return;
-
-            Float(dummyHpFills[target], "처치!", damageColor);
-            targets.MarkDefeated(target);
+            Hit(target, amount, prefix, size);
         }
 
-        private void DelayTarget(int amount)
+        /// <summary>살아 있는 모든 허수아비에게 피해(마법 특수 보석).</summary>
+        private void HitAll(int amount, string prefix, float size)
+        {
+            var hitAny = false;
+            for (var i = 0; i < DummyCount; i++)
+            {
+                if (!targets.IsAlive(i)) continue;
+
+                Hit(i, amount, prefix, size);
+                hitAny = true;
+            }
+
+            if (!hitAny) Float(mainFloatAnchor, "대상 없음", damageColor);
+        }
+
+        private void Hit(int index, int amount, string prefix, float size)
+        {
+            dummyHp[index] = Mathf.Max(0, dummyHp[index] - amount);
+            Float(dummyHpFills[index], $"{prefix}{amount}", damageColor, size);
+
+            if (dummyHp[index] > 0) return;
+
+            Float(dummyHpFills[index], "처치!", damageColor);
+            targets.MarkDefeated(index);
+        }
+
+        private void DelayTarget(int amount, string prefix, float size)
         {
             var target = targets.Current;
-            if (target < 0) return;
+            if (target >= 0) Delay(target, amount, prefix, size);
+        }
 
+        /// <summary>살아 있는 모든 허수아비 행동 지연(혼돈 특수 보석).</summary>
+        private void DelayAll(int amount, string prefix, float size)
+        {
+            for (var i = 0; i < DummyCount; i++)
+            {
+                if (targets.IsAlive(i)) Delay(i, amount, prefix, size);
+            }
+        }
+
+        private void Delay(int index, int amount, string prefix, float size)
+        {
             if (amount > 0)
             {
-                dummyCount[target] += amount;
-                Float(dummyHpFills[target], $"지연 +{amount}", delayColor);
+                dummyCount[index] += amount;
+                Float(dummyHpFills[index], $"{prefix}지연 +{amount}", delayColor, size);
             }
             else
             {
-                Float(dummyHpFills[target], "지연 상한", delayColor);
+                Float(dummyHpFills[index], "지연 상한", delayColor);
             }
         }
 
@@ -257,7 +302,7 @@ namespace ProjectP.Dev
         private static void SetBar(RectTransform fill, float ratio) => fill.anchorMax = new Vector2(Mathf.Clamp01(ratio), 1f);
 
         /// <summary>anchor 위치에서 글자가 떠오르며 사라진다.</summary>
-        private void Float(RectTransform anchor, string text, Color color)
+        private void Float(RectTransform anchor, string text, Color color, float size = NormalFloatSize)
         {
             var go = new GameObject("FloatText", typeof(RectTransform), typeof(TextMeshProUGUI));
             var rect = (RectTransform)go.transform;
@@ -268,7 +313,7 @@ namespace ProjectP.Dev
 
             var label = go.GetComponent<TextMeshProUGUI>();
             label.text = text;
-            label.fontSize = 34f;
+            label.fontSize = size;
             label.fontStyle = FontStyles.Bold;
             label.color = color;
             label.alignment = TextAlignmentOptions.Center;

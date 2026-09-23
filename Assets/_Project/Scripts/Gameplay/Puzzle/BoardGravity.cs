@@ -34,6 +34,8 @@ namespace ProjectP.Gameplay.Puzzle
     /// 사용한 보석을 없애고, 남은 보석은 같은 열에서 아래로 내린 뒤, 빈 윗칸은 새 보석으로 채운다.
     /// 행 0이 맨 아래이므로 "아래로 내림" = 행 번호를 줄임, "위에서 보충" = 맨 위 행부터 채움.
     /// 새 보석 생성 순서: 열 0부터, 각 열은 아래 빈칸부터. 같은 생성 순서면 결과가 같다(시드 재현).
+    /// 특수 보석 표시는 보석과 함께 움직이고, 새로 채운 보석은 일반 보석이다.
+    /// 5연속으로 만드는 특수 보석은 호출하는 쪽이 경로 마지막 칸을 removed에서 빼고 특수 보석으로 바꾼 뒤 부른다.
     /// </summary>
     public static class BoardGravity
     {
@@ -66,6 +68,7 @@ namespace ProjectP.Gameplay.Puzzle
                         var type = board[from];
                         var to = new BoardPosition(writeRow, column);
                         board[to] = type;
+                        board.SetSpecial(to, board.IsSpecial(from)); // 특수 보석은 떨어져도 특수 보석이다
                         drops.Add(new GemDrop(to, row, false, type));
                     }
 
@@ -78,6 +81,7 @@ namespace ProjectP.Gameplay.Puzzle
                     var type = spawn();
                     var to = new BoardPosition(row, column);
                     board[to] = type;
+                    board.SetSpecial(to, false); // 새로 채우는 보석은 언제나 일반 보석
                     drops.Add(new GemDrop(to, board.Rows + (row - writeRow), true, type));
                 }
             }

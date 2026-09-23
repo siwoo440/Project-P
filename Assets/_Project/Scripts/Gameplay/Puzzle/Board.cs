@@ -8,11 +8,13 @@ namespace ProjectP.Gameplay.Puzzle
     ///
     /// - 좌표는 BoardPosition 기준 (행 0 = 맨 아래, 열 0 = 맨 왼쪽).
     /// - 칸 번호(index)는 row * Columns + column. 맨 아래 행 왼쪽부터 오른쪽으로 센다.
+    /// - 칸마다 보석 종류와 특수 보석 여부(9일차)를 가진다. 인덱서로 종류를 바꿔도 특수 여부는 그대로다.
     /// - 화면(BoardView)은 이 모델을 읽기만 한다.
     /// </summary>
     public sealed class Board
     {
         private readonly GemType[] cells;
+        private readonly bool[] special;
 
         public Board(int rows, int columns)
         {
@@ -22,6 +24,7 @@ namespace ProjectP.Gameplay.Puzzle
             Rows = rows;
             Columns = columns;
             cells = new GemType[rows * columns];
+            special = new bool[rows * columns];
         }
 
         public int Rows { get; }
@@ -32,6 +35,28 @@ namespace ProjectP.Gameplay.Puzzle
         {
             get => cells[ToIndex(position)];
             set => cells[ToIndex(position)] = value;
+        }
+
+        /// <summary>특수 보석 여부(기획서 5.6). 종류는 인덱서 값을 따른다 — 물리 특수 보석 = Physical + 특수.</summary>
+        public bool IsSpecial(BoardPosition position) => special[ToIndex(position)];
+
+        public void SetSpecial(BoardPosition position, bool isSpecial) => special[ToIndex(position)] = isSpecial;
+
+        public PathGem GetPathGem(BoardPosition position) => new PathGem(this[position], IsSpecial(position));
+
+        /// <summary>보드 위 특수 보석 수.</summary>
+        public int SpecialCount
+        {
+            get
+            {
+                var count = 0;
+                foreach (var flag in special)
+                {
+                    if (flag) count++;
+                }
+
+                return count;
+            }
         }
 
         public bool Contains(BoardPosition position) =>

@@ -72,10 +72,14 @@ namespace ProjectP.EditorTools
             var boardSize = new Vector2(config.Columns * pitch - Spacing, config.Rows * pitch - Spacing);
             var cardSize = boardSize + Vector2.one * (BoardPadding * 2f);
             var cardY = -540f + 36f + cardSize.y / 2f;
-            var sideX = cardSize.x / 2f + 42f + SidePanelSize.x / 2f;
+            // 양옆 세로 칸: 상단 카드 아래부터 보드 카드 아랫변까지.
+            var side = new SideColumn(
+                cardSize.x / 2f + 42f + SideWidth / 2f,
+                CardY - CardSize.y / 2f - 16f,
+                cardY - cardSize.y / 2f);
 
-            // 보석 분포: 보드 오른쪽 세로 패널 (허수아비와 자리를 바꿈, 사용자 요청).
-            var (statTexts, summary) = BuildStatsPanel(ui, root.transform, database, new Vector2(sideX, cardY));
+            // 보석 분포: 보드 오른쪽 세로 패널 (허수아비와 자리를 바꿈, 사용자 요청). 아래에 연속 보너스 안내.
+            var (statTexts, summary) = BuildStatsPanel(ui, root.transform, database, config, side);
 
             var boardCard = ui.Card("BoardCard", root.transform, cardSize, new Vector2(0f, cardY));
 
@@ -90,7 +94,9 @@ namespace ProjectP.EditorTools
             var boardView = board.gameObject.AddComponent<BoardView>();
             var input = board.gameObject.AddComponent<BoardInput>();
             UIFactory.Wire(boardView,
-                ("cellRoot", board), ("tileSprite", theme.gemTile), ("outlineSprite", theme.gemTileOutline), ("shadowSprite", theme.shadow));
+                ("cellRoot", board), ("tileSprite", theme.gemTile), ("outlineSprite", theme.gemTileOutline), ("shadowSprite", theme.shadow),
+                ("glowSprite", theme.glow));
+            SetColor(boardView, "specialColor", theme.accent);
 
             // 연결선 층: 보드 위에 같은 크기로 겹친다.
             var overlay = UIFactory.Rect("Connection", boardCard);
@@ -99,8 +105,11 @@ namespace ProjectP.EditorTools
             var (badge, badgeText) = CountBadge(ui, overlay);
             UIFactory.Wire(connectionView,
                 ("puzzle", puzzle), ("boardView", boardView), ("lineRoot", overlay), ("dotSprite", theme.circle),
-                ("countBadge", badge), ("countText", badgeText));
+                ("countBadge", badge), ("countText", badgeText), ("tagSprite", theme.rounded));
             SetColor(connectionView, "lineColor", BootUIBuilder.WithAlpha(theme.accent, 0.85f));
+            SetColor(connectionView, "tagColor", BootUIBuilder.WithAlpha(theme.surface, 0.92f));
+            SetColor(connectionView, "tagTextColor", theme.accent);
+            SetColor(connectionView, "comboTagColor", theme.accentSecondary);
 
             // 행동력: 보드 상단 중앙, 카드 윗변에 걸친다.
             BuildActionPointTab(ui, root.transform, puzzle, cardY + cardSize.y / 2f);
@@ -115,8 +124,8 @@ namespace ProjectP.EditorTools
                 20f, theme.textSecondary);
             UIFactory.AnchorBottom(hint.rectTransform, new Vector2(1700f, 28f), 4f);
 
-            // 보석 효과 확인: 보드 왼쪽 메인 캐릭터, 상단 가운데 허수아비, 떠오르는 숫자 층.
-            BuildEffectPanels(ui, root, puzzle, new Vector2(-sideX, cardY));
+            // 보석 효과 확인: 보드 왼쪽 위 메인 캐릭터·아래 연결 효과, 상단 가운데 허수아비, 떠오르는 숫자 층.
+            BuildEffectPanels(ui, root, puzzle, side);
 
             // 취소 상태 표시: 화면 맨 위에 겹치는 붉은 막. 입력은 막지 않는다.
             var cancelOverlay = BuildCancelOverlay(ui, root.transform);
@@ -250,12 +259,30 @@ namespace ProjectP.EditorTools
             return (seed, input, seedButton, regenerate);
         }
 
-        /// <summary>보석 분포 세로 패널: 제목 · "6 × 12 · 72칸" · 종류별 한 줄 [보석] [이름] [N개 · N%].</summary>
-        private static (TMP_Text[] counts, TMP_Text summary) BuildStatsPanel(UIFactory ui, Transform parent, GameDatabase database, Vector2 position)
+        /// <summary>
+        /// 보석 분포 세로 패널(오른쪽 칸 전체): 제목 · "6 × 12 · 72칸 · 특수 0" · 종류별 한 줄 [보석] [이름] [N개 · N%]
+        /// · 아래에 연속 보너스 안내(값은 PuzzleConfig에서 읽는다).
+        /// </summary>
+        private static (TMP_Text[] counts, TMP_Text summary) BuildStatsPanel(UIFactory ui, Transform parent, GameDatabase database, PuzzleConfig config,
+            SideColumn side)
         {
             var theme = ui.Theme;
-            var panel = ui.Card("StatsPanel", parent, SidePanelSize, position);
+            var panel = ui.Card("StatsPanel", parent, new Vector2(SideWidth, side.Height), new Vector2(side.X, side.Center));
             SidePanelHeader(ui, panel, "보석 분포");
+
+            // 연속 보너스 안내: 5종 줄(~454) 아래.
+            ui.Divider(panel, 252f, 474f);
+            var legendHeader = ui.Text("LegendHeader", panel, "연속 보너스", 22f, theme.textSecondary, FontStyles.Bold, TextAlignmentOptions.MidlineLeft);
+            UIFactory.AnchorTop(legendHeader.rectTransform, new Vector2(252f, 30f), 488f);
+            var legend = ui.Text("Legend", panel,
+                $"같은 종류 2번째부터 <color=#{Hex(theme.accent)}>+{config.ChainBonusPerGem * 100f:0}%</color>씩 누적\n" +
+                $"<color=#{Hex(theme.accentSecondary)}>{config.ComboLength}연속</color> → 강공격 등 연속 강화\n" +
+                $"<color=#{Hex(theme.accent)}>{config.SpecialLength}연속</color> → 마지막 칸에 특수 보석\n" +
+                "칸 옆 ×1.2 = 그 보석이 받는 배율",
+                18f, theme.textPrimary, alignment: TextAlignmentOptions.TopLeft);
+            UIFactory.AnchorTop(legend.rectTransform, new Vector2(252f, 130f), 522f);
+            legend.richText = true;
+            legend.lineSpacing = 12f;
 
             var summary = ui.Text("Summary", panel, "", 20f, theme.textSecondary);
             UIFactory.AnchorTop(summary.rectTransform, new Vector2(252f, 26f), 58f);
@@ -364,23 +391,51 @@ namespace ProjectP.EditorTools
             SetColor(view, "spentColor", theme.outline);
         }
 
-        private static readonly Vector2 SidePanelSize = new Vector2(300f, 470f);
+        private const float SideWidth = 300f;
+        private const float SideGap = 16f;
+        private const float MainPanelHeight = 318f;
+
+        /// <summary>보드 양옆 세로 칸. X = 가운데에서 떨어진 거리(오른쪽 +), Top·Bottom = 캔버스 가운데 기준 y.</summary>
+        private readonly struct SideColumn
+        {
+            public SideColumn(float x, float top, float bottom)
+            {
+                X = x;
+                Top = top;
+                Bottom = bottom;
+            }
+
+            public float X { get; }
+            public float Top { get; }
+            public float Bottom { get; }
+            public float Height => Top - Bottom;
+            public float Center => (Top + Bottom) / 2f;
+        }
 
         /// <summary>
-        /// 보석 효과 확인 화면(개발용): 보드 왼쪽 메인 캐릭터(HP·임시 스탯 −/+·HP −20),
-        /// 상단 가운데 허수아비 3마리(왼쪽부터 순번 0·1·2, HP·행동 카운트·되살리기). 실제 전투처럼 적이 보드 위에 선다.
-        /// 메인 패널은 보이지 않는 취소 영역 위에 있다(그 위에서 놓으면 취소).
+        /// 보석 효과 확인 화면(개발용):
+        /// - 보드 왼쪽 위 메인 캐릭터(HP·임시 스탯 −/+·HP −20), 왼쪽 아래 연결 효과 실시간 표시(9일차, 사용자 요청)
+        /// - 상단 가운데 허수아비 3마리(왼쪽부터 순번 0·1·2, HP·행동 카운트·되살리기). 실제 전투처럼 적이 보드 위에 선다.
+        /// 왼쪽 패널들은 보이지 않는 취소 영역 위에 있다(그 위에서 놓으면 취소).
         /// </summary>
-        private static void BuildEffectPanels(UIFactory ui, GameObject root, PuzzleManager puzzle, Vector2 mainPosition)
+        private static void BuildEffectPanels(UIFactory ui, GameObject root, PuzzleManager puzzle, SideColumn side)
         {
             var theme = ui.Theme;
             var healColor = new Color32(48, 192, 122, 255);
 
-            // 메인 캐릭터
-            var main = ui.Card("MainPanel", root.transform, SidePanelSize, mainPosition);
-            SidePanelHeader(ui, main, "메인 캐릭터");
+            // 메인 캐릭터: 왼쪽 칸 위. 제목 줄 오른쪽에 HP -20.
+            var main = ui.Card("MainPanel", root.transform, new Vector2(SideWidth, MainPanelHeight),
+                new Vector2(-side.X, side.Top - MainPanelHeight / 2f));
+            CardHeader(ui, main, "메인 캐릭터");
             var (mainHpText, mainBar, mainFill) = HpRow(ui, main, healColor);
-            ui.Divider(main, 252f, 146f);
+            ui.Divider(main, 252f, 140f);
+
+            var hurt = ui.Button("HurtButton", main, "HP -20", ButtonStyle.Secondary, 20f);
+            UIFactory.Anchor((RectTransform)hurt.transform, new Vector2(1f, 1f), new Vector2(96f, 38f), new Vector2(-20f, -18f));
+
+            // 연결 효과: 왼쪽 칸 아래 나머지.
+            var previewHeight = side.Height - MainPanelHeight - SideGap;
+            BuildPreviewPanel(ui, root.transform, puzzle, new Vector2(SideWidth, previewHeight), new Vector2(-side.X, side.Bottom + previewHeight / 2f));
 
             var statNames = new[] { "물리 공격", "마법 공격", "회복력" };
             var statTexts = new Object[3];
@@ -389,7 +444,7 @@ namespace ProjectP.EditorTools
             for (var i = 0; i < statNames.Length; i++)
             {
                 var row = UIFactory.Rect($"Stat{i}", main);
-                UIFactory.AnchorTop(row, new Vector2(252f, 44f), 166f + i * 56f);
+                UIFactory.AnchorTop(row, new Vector2(252f, 44f), 156f + i * 52f);
                 UIFactory.Row(row, 12f, TextAnchor.MiddleLeft);
 
                 ui.Text("Label", row, statNames[i], 22f, theme.textSecondary, alignment: TextAlignmentOptions.MidlineLeft)
@@ -405,9 +460,6 @@ namespace ProjectP.EditorTools
                 minusButtons[i] = minus;
                 plusButtons[i] = plus;
             }
-
-            var hurt = ui.Button("HurtButton", main, "HP -20", ButtonStyle.Secondary, 24f);
-            UIFactory.AnchorBottom((RectTransform)hurt.transform, new Vector2(252f, 52f), 24f);
 
             // 허수아비 3마리: 상단 가운데 카드(원래 보석 분포 자리). 클릭하면 공격 대상. 왼쪽부터 순번 0·1·2.
             var enemies = ui.Card("DummyPanel", root.transform, CardSize, new Vector2(0f, CardY));
@@ -518,6 +570,78 @@ namespace ProjectP.EditorTools
 
             return new DummyRow(button, fill, hp, count, border, mark.gameObject, group);
         }
+
+        /// <summary>
+        /// 연결 효과 실시간 표시(사용자 요청): 드래그 중 지금 놓으면 받을 효과.
+        /// [마지막 보석] [×1.4 / 물리 3연속] · 다음 안내 · 피해·회복·지연·행동력 합계 · 발동한 연속 강화·특수 보석.
+        /// 잇지 않을 때는 안내 문구만 보인다.
+        /// </summary>
+        private static void BuildPreviewPanel(UIFactory ui, Transform parent, PuzzleManager puzzle, Vector2 size, Vector2 position)
+        {
+            var theme = ui.Theme;
+            var panel = ui.Card("PreviewPanel", parent, size, position);
+            CardHeader(ui, panel, "연결 효과");
+
+            var idle = UIFactory.Rect("Idle", panel);
+            UIFactory.Stretch(idle);
+            var idleText = ui.Text("Text", idle, "보석을 이으면\n받는 효과가 여기에 보입니다", 20f, theme.textSecondary);
+            UIFactory.Place(idleText.rectTransform, new Vector2(252f, 80f), new Vector2(0f, -10f));
+
+            var active = UIFactory.Rect("Active", panel);
+            UIFactory.Stretch(active);
+
+            // 마지막 보석 + 배율
+            var tile = UIFactory.Image("GemTile", active, theme.gemTile, Color.white);
+            UIFactory.Anchor(tile.rectTransform, new Vector2(0f, 1f), new Vector2(64f, 64f), new Vector2(24f, -64f));
+            var icon = UIFactory.Image("Icon", tile.transform, null, Color.white);
+            icon.preserveAspect = true;
+            icon.rectTransform.sizeDelta = new Vector2(38f, 38f);
+            var ring = UIFactory.Image("SpecialRing", tile.transform, theme.gemTileOutline, theme.accent);
+            UIFactory.Stretch(ring.rectTransform, 3f);
+
+            var multiplier = ui.Text("Multiplier", active, "×1.0", 44f, theme.accent, FontStyles.Bold, TextAlignmentOptions.MidlineLeft);
+            UIFactory.Anchor(multiplier.rectTransform, new Vector2(0f, 1f), new Vector2(172f, 46f), new Vector2(104f, -60f));
+            var chain = ui.Text("Chain", active, "-", 22f, theme.textPrimary, FontStyles.Bold, TextAlignmentOptions.MidlineLeft);
+            UIFactory.Anchor(chain.rectTransform, new Vector2(0f, 1f), new Vector2(172f, 26f), new Vector2(104f, -104f));
+
+            var next = ui.Text("Next", active, "-", 19f, theme.textSecondary, alignment: TextAlignmentOptions.TopLeft);
+            UIFactory.Anchor(next.rectTransform, new Vector2(0f, 1f), new Vector2(252f, 50f), new Vector2(24f, -140f));
+            next.richText = true;
+
+            ui.Divider(active, 252f, 196f);
+
+            // 합계 2×2: 피해 · 회복 / 지연 · 행동력
+            var damage = TotalCell(ui, active, "피해", new Color32(255, 110, 110, 255), new Vector2(24f, -208f));
+            var heal = TotalCell(ui, active, "회복", new Color32(80, 220, 150, 255), new Vector2(150f, -208f));
+            var delay = TotalCell(ui, active, "지연", new Color32(180, 150, 255, 255), new Vector2(24f, -242f));
+            var actionPoints = TotalCell(ui, active, "행동력", theme.accentSecondary, new Vector2(150f, -242f));
+
+            var bonus = ui.Text("Bonus", active, "-", 19f, theme.accent, FontStyles.Bold, TextAlignmentOptions.MidlineLeft);
+            UIFactory.Anchor(bonus.rectTransform, new Vector2(0f, 1f), new Vector2(252f, 28f), new Vector2(24f, -280f));
+
+            var view = panel.gameObject.AddComponent<ConnectionPreviewView>();
+            UIFactory.Wire(view,
+                ("puzzle", puzzle), ("idleGroup", idle.gameObject), ("activeGroup", active.gameObject),
+                ("gemTile", tile), ("gemIcon", icon), ("gemSpecialRing", ring.gameObject),
+                ("multiplierText", multiplier), ("chainText", chain), ("nextText", next),
+                ("damageText", damage), ("healText", heal), ("delayText", delay), ("actionPointText", actionPoints), ("bonusText", bonus));
+            SetColor(view, "baseColor", theme.textSecondary);
+            SetColor(view, "bonusColor", theme.accent);
+            SetColor(view, "comboColor", theme.accentSecondary);
+        }
+
+        /// <summary>합계 한 칸: [이름] [값]. 값 글자를 돌려준다.</summary>
+        private static TMP_Text TotalCell(UIFactory ui, RectTransform parent, string label, Color valueColor, Vector2 topLeft)
+        {
+            var name = ui.Text($"{label}Label", parent, label, 20f, ui.Theme.textSecondary, alignment: TextAlignmentOptions.MidlineLeft);
+            UIFactory.Anchor(name.rectTransform, new Vector2(0f, 1f), new Vector2(62f, 30f), topLeft);
+
+            var value = ui.Text($"{label}Value", parent, "0", 24f, valueColor, FontStyles.Bold, TextAlignmentOptions.MidlineLeft);
+            UIFactory.Anchor(value.rectTransform, new Vector2(0f, 1f), new Vector2(60f, 30f), topLeft + new Vector2(64f, 0f));
+            return value;
+        }
+
+        private static string Hex(Color color) => ColorUtility.ToHtmlStringRGB(color);
 
         private static void SidePanelHeader(UIFactory ui, RectTransform panel, string text)
         {
