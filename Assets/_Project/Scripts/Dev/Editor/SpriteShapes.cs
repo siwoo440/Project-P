@@ -82,6 +82,18 @@ namespace ProjectP.EditorTools
             });
         }
 
+        /// <summary>보석 타일과 같은 모양의 외곽선. 선택된 보석 표시에 쓴다.</summary>
+        public static byte[] GemTileOutline(int size, float stroke)
+        {
+            var half = size / 2f - 2f;
+            var radius = size * 0.24f;
+            return Render(size, size, (x, y) =>
+            {
+                var d = RoundedBox(x, y, half - stroke / 2f, half - stroke / 2f, radius - stroke / 2f);
+                return (1f, Coverage(Math.Abs(d) - stroke / 2f));
+            });
+        }
+
         /// <summary>물리 — 세로로 긴 다이아몬드.</summary>
         public static byte[] IconPhysical(int size)
         {

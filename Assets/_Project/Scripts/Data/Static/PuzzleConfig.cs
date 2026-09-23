@@ -15,7 +15,11 @@ namespace ProjectP.Data
         [Tooltip("보드 열 수. 기획서 5.1")]
         [Min(1)] [SerializeField] private int columns = 12;
 
+        [Tooltip("한 번에 확정하려면 최소 몇 개를 이어야 하는지. 기획서 5.3")]
+        [Min(1)] [SerializeField] private int minConnection = 2;
+
         public int Rows => rows;
         public int Columns => columns;
+        public int MinConnection => minConnection;
     }
 }

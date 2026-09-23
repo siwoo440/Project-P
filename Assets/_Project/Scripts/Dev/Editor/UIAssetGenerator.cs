@@ -40,6 +40,7 @@ namespace ProjectP.EditorTools
             theme.circle = Save("ui_circle.png", 64, 64, SpriteShapes.Circle(64), 0);
             theme.glow = Save("ui_glow.png", 256, 256, SpriteShapes.Glow(256), 0);
             theme.gemTile = Save("gem_tile.png", 128, 128, SpriteShapes.GemTile(128), 0);
+            theme.gemTileOutline = Save("gem_tile_outline.png", 128, 128, SpriteShapes.GemTileOutline(128, 7f), 0);
             theme.backgroundGradient = Save("ui_background.png", 16, 512,
                 SpriteShapes.VerticalGradient(16, 512, ToRgb(theme.backgroundTop), ToRgb(theme.backgroundBottom)), 0);
 
