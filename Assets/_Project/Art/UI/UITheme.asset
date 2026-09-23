@@ -32,3 +32,4 @@ MonoBehaviour:
   glow: {fileID: 21300000, guid: 05e2d70ab96a4a84394072c097533b53, type: 3}
   gemTile: {fileID: 21300000, guid: 9d232988a056a2c4e95bd05fea14c933, type: 3}
   gemTileOutline: {fileID: 21300000, guid: 42696e31ae1be1447888d3da40d34e80, type: 3}
+  vignette: {fileID: 21300000, guid: d794badea765aef48b7c9efd749c6d54, type: 3}

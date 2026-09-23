@@ -248,6 +248,44 @@ namespace ProjectP.EditorTools
             return slider;
         }
 
+        /// <summary>체크 상자 + 글자. 켜지면 상자 안이 강조색으로 채워진다. size는 전체 크기(상자 + 글자).</summary>
+        public Toggle Toggle(string name, Transform parent, string label, Vector2 size, float fontSize = 24f)
+        {
+            var root = Rect(name, parent);
+            root.sizeDelta = size;
+            var toggle = root.gameObject.AddComponent<Toggle>();
+
+            var box = Image("Box", root, Theme.rounded, Theme.surfaceRaised, sliced: true, raycast: true);
+            box.pixelsPerUnitMultiplier = 2f;
+            Anchor(box.rectTransform, new Vector2(0f, 0.5f), new Vector2(36f, 36f), Vector2.zero);
+
+            var border = Image("Border", box.transform, Theme.roundedOutline, Theme.outline, sliced: true);
+            border.pixelsPerUnitMultiplier = 2f;
+            Stretch(border.rectTransform);
+
+            var check = Image("Check", box.transform, Theme.rounded, Theme.accent, sliced: true);
+            check.pixelsPerUnitMultiplier = 3f;
+            Stretch(check.rectTransform, -8f);
+
+            var text = Text("Label", root, label, fontSize, Theme.textPrimary, alignment: TextAlignmentOptions.MidlineLeft);
+            Anchor(text.rectTransform, new Vector2(0f, 0.5f), new Vector2(size.x - 48f, size.y), new Vector2(48f, 0f));
+
+            toggle.targetGraphic = box;
+            toggle.graphic = check;
+            toggle.isOn = true;
+            toggle.colors = new ColorBlock
+            {
+                normalColor = new Color(0.9f, 0.9f, 0.9f, 1f),
+                highlightedColor = Color.white,
+                pressedColor = new Color(0.72f, 0.72f, 0.72f, 1f),
+                selectedColor = new Color(0.9f, 0.9f, 0.9f, 1f),
+                disabledColor = new Color(0.55f, 0.55f, 0.55f, 0.45f),
+                colorMultiplier = 1f,
+                fadeDuration = 0.08f
+            };
+            return toggle;
+        }
+
         public TMP_InputField InputField(string name, Transform parent, string placeholder, float fontSize = 28f)
         {
             var go = TMP_DefaultControls.CreateInputField(new TMP_DefaultControls.Resources());

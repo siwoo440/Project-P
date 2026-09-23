@@ -94,6 +94,27 @@ namespace ProjectP.EditorTools
             });
         }
 
+        /// <summary>
+        /// 화면 가장자리 번짐(비네트). 가운데는 투명하고 가장자리로 갈수록 진해진다.
+        /// 화면 크기로 늘려 쓰므로 둥근 사각형(초타원, 지수 4) 기준으로 계산해 화면 네 변을 따라 번지고,
+        /// 모서리에 대각선 이음매가 생기지 않게 한다.
+        /// </summary>
+        public static byte[] Vignette(int size)
+        {
+            return Render(size, size, (x, y) =>
+            {
+                var nx = Math.Abs(x) / (size / 2f);
+                var ny = Math.Abs(y) / (size / 2f);
+                var edge = (float)Math.Pow(Math.Pow(nx, 4) + Math.Pow(ny, 4), 0.25);
+
+                // 가장자리에서 안쪽 5% 구간에만 번진다(가운데 95%는 투명).
+                const float start = 0.95f;
+                var t = Clamp01((edge - start) / (1f - start));
+                var smooth = t * t * (3f - 2f * t);
+                return (1f, (float)Math.Pow(smooth, 1.6f));
+            });
+        }
+
         /// <summary>물리 — 세로로 긴 다이아몬드.</summary>
         public static byte[] IconPhysical(int size)
         {

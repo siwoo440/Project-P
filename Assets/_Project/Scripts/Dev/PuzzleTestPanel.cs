@@ -10,7 +10,7 @@ namespace ProjectP.Dev
 {
     /// <summary>
     /// Dev_PuzzleTest 전용 제어 화면. 기획서 12.15
-    /// 실제 PuzzleManager를 그대로 쓰고, 보드 재생성·시드 지정·보석 분포·연결 기록 표시만 추가한다.
+    /// 실제 PuzzleManager를 그대로 쓰고, 보드 재생성·시드·보석 분포·연결 기록·턴·행동력 조정만 추가한다.
     /// </summary>
     public class PuzzleTestPanel : MonoBehaviour
     {
@@ -28,22 +28,33 @@ namespace ProjectP.Dev
         [SerializeField] private TMP_Text connectionStatusText;
         [SerializeField] private TMP_Text connectionLogText;
 
+        [Header("턴·행동력")]
+        [SerializeField] private TMP_Text turnText;
+        [SerializeField] private Button nextTurnButton;
+        [SerializeField] private Toggle autoTurnToggle;
+        [SerializeField] private Button actionPointMinusButton;
+        [SerializeField] private Button actionPointPlusButton;
+        [SerializeField] private TMP_Text actionPointBaseText;
+
         private readonly LinkedList<string> log = new LinkedList<string>();
-        private int confirmedCount;
 
         private void OnEnable()
         {
             puzzle.BoardChanged += Refresh;
+            puzzle.TurnStateChanged += RefreshTurn;
             puzzle.ConnectionChanged += OnConnectionChanged;
             puzzle.ConnectionConfirmed += OnConnectionConfirmed;
+            puzzle.ConnectionWasted += OnConnectionWasted;
             puzzle.ConnectionCanceled += OnConnectionCanceled;
         }
 
         private void OnDisable()
         {
             puzzle.BoardChanged -= Refresh;
+            puzzle.TurnStateChanged -= RefreshTurn;
             puzzle.ConnectionChanged -= OnConnectionChanged;
             puzzle.ConnectionConfirmed -= OnConnectionConfirmed;
+            puzzle.ConnectionWasted -= OnConnectionWasted;
             puzzle.ConnectionCanceled -= OnConnectionCanceled;
         }
 
@@ -53,9 +64,15 @@ namespace ProjectP.Dev
             seedButton.onClick.AddListener(RegenerateWithInputSeed);
             seedInput.onSubmit.AddListener(_ => RegenerateWithInputSeed());
 
+            nextTurnButton.onClick.AddListener(puzzle.StartTurn);
+            autoTurnToggle.onValueChanged.AddListener(isOn => puzzle.AutoNextTurn = isOn);
+            actionPointMinusButton.onClick.AddListener(() => puzzle.SetBaseActionPoints(puzzle.BaseActionPoints - 1));
+            actionPointPlusButton.onClick.AddListener(() => puzzle.SetBaseActionPoints(puzzle.BaseActionPoints + 1));
+
             connectionStatusText.text = IdleStatus;
             connectionLogText.text = "";
             if (puzzle.Board != null) Refresh(puzzle.Board);
+            RefreshTurn();
         }
 
         private void RegenerateWithInputSeed()
@@ -76,17 +93,39 @@ namespace ProjectP.Dev
             }
         }
 
+        private void RefreshTurn()
+        {
+            var state = puzzle.IsResolving ? "보석 정리 중"
+                : puzzle.CanAct ? "연결 가능"
+                : "다음 턴 대기";
+            turnText.text = $"턴 {puzzle.TurnNumber}  ·  {state}";
+
+            actionPointBaseText.text = puzzle.BaseActionPoints.ToString();
+            actionPointMinusButton.interactable = puzzle.BaseActionPoints > 1;
+            nextTurnButton.interactable = !puzzle.CanAct && !puzzle.IsResolving;
+            autoTurnToggle.SetIsOnWithoutNotify(puzzle.AutoNextTurn);
+        }
+
         private void OnConnectionChanged(IReadOnlyList<BoardPosition> positions) =>
             connectionStatusText.text = $"연결 중 · {positions.Count}개";
 
-        private void OnConnectionCanceled() => connectionStatusText.text = IdleStatus;
+        private void OnConnectionCanceled() => connectionStatusText.text = "취소됨 · 턴 유지";
 
         private void OnConnectionConfirmed(IReadOnlyList<BoardPosition> positions)
         {
-            confirmedCount++;
             connectionStatusText.text = IdleStatus;
+            AddLog($"{Describe(positions)}  <color=#F2C14E>{positions.Count}개 사용</color>");
+        }
 
-            log.AddFirst($"<color=#A8AFC7>#{confirmedCount}</color>  {Describe(positions)}  <color=#F2C14E>{positions.Count}개</color>");
+        private void OnConnectionWasted(IReadOnlyList<BoardPosition> positions)
+        {
+            connectionStatusText.text = IdleStatus;
+            AddLog($"{Describe(positions)}  <color=#E5484D>{positions.Count}개 · 턴 소모</color>");
+        }
+
+        private void AddLog(string entry)
+        {
+            log.AddFirst($"<color=#A8AFC7>턴 {puzzle.TurnNumber}</color>  {entry}");
             while (log.Count > MaxLogEntries) log.RemoveLast();
             connectionLogText.text = string.Join("\n", log);
         }

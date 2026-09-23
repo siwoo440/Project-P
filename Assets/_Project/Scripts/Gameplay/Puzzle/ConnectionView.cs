@@ -39,7 +39,8 @@ namespace ProjectP.Gameplay.Puzzle
         private void OnEnable()
         {
             puzzle.ConnectionChanged += OnChanged;
-            puzzle.ConnectionConfirmed += OnConfirmed;
+            puzzle.ConnectionConfirmed += OnEnded;
+            puzzle.ConnectionWasted += OnEnded;
             puzzle.ConnectionCanceled += Clear;
             puzzle.BoardChanged += OnBoardChanged;
             Clear();
@@ -48,7 +49,8 @@ namespace ProjectP.Gameplay.Puzzle
         private void OnDisable()
         {
             puzzle.ConnectionChanged -= OnChanged;
-            puzzle.ConnectionConfirmed -= OnConfirmed;
+            puzzle.ConnectionConfirmed -= OnEnded;
+            puzzle.ConnectionWasted -= OnEnded;
             puzzle.ConnectionCanceled -= Clear;
             puzzle.BoardChanged -= OnBoardChanged;
         }
@@ -61,11 +63,8 @@ namespace ProjectP.Gameplay.Puzzle
             Draw(positions);
         }
 
-        private void OnConfirmed(IReadOnlyList<BoardPosition> positions)
-        {
-            Clear();
-            boardView.Flash(positions);
-        }
+        // 사용한 보석의 터짐·낙하 연출은 PuzzleManager가 BoardView에 맡긴다. 여기서는 선만 지운다.
+        private void OnEnded(IReadOnlyList<BoardPosition> positions) => Clear();
 
         private void Clear()
         {

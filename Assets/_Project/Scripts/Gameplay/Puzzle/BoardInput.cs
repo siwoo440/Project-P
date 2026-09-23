@@ -7,8 +7,9 @@ namespace ProjectP.Gameplay.Puzzle
     /// <summary>
     /// 보드 마우스 입력. 기획서 5.3 / 9.6
     ///
-    /// - 왼쪽 버튼을 누른 채 드래그해 경로를 만들고, 놓는 순간 확정한다(보드 밖에서 놓아도 확정).
-    /// - 드래그 중 우클릭 또는 ESC로 취소한다.
+    /// - 왼쪽 버튼을 누른 채 드래그해 경로를 만들고, 놓는 순간 턴을 쓴다(보드 밖에서 놓아도 동일).
+    /// - 보이지 않는 취소 영역(CancelZone)에서 놓거나, 드래그 중 우클릭 또는 ESC를 누르면 턴을 쓰지 않고 취소한다.
+    ///   드래그 중 포인터가 취소 영역에 들어가면 CancelOverlay로 화면을 살짝 붉게 물들여 알린다.
     /// - 칸마다 버튼을 두지 않고 보드 영역 하나에서 마우스 위치를 계산해 칸을 찾는다.
     ///   칸 중심의 hitRatio 원 안에 들어가야 선택되므로 대각선으로 그을 때 옆 칸이 잘못 잡히지 않는다.
     /// 이 오브젝트에는 입력을 받을 투명 Graphic(raycastTarget)이 있어야 한다.
@@ -19,6 +20,8 @@ namespace ProjectP.Gameplay.Puzzle
         [SerializeField] private PuzzleManager puzzle;
         [SerializeField] private BoardView boardView;
         [SerializeField, Range(0.5f, 1f)] private float hitRatio = 0.8f;
+        [SerializeField] private CancelZone[] cancelZones = new CancelZone[0];
+        [SerializeField] private CancelOverlay cancelOverlay;
 
         private RectTransform rect;
         private bool dragging;
@@ -39,6 +42,8 @@ namespace ProjectP.Gameplay.Puzzle
         public void OnDrag(PointerEventData eventData)
         {
             if (!dragging || eventData.button != PointerEventData.InputButton.Left) return;
+
+            ShowCancelState(IsOverCancelZone(eventData));
             if (!TryGetBoardPoint(eventData, out var point)) return;
 
             // 한 프레임에 여러 칸을 건너뛰어도 지나간 칸을 순서대로 처리한다.
@@ -54,8 +59,10 @@ namespace ProjectP.Gameplay.Puzzle
         {
             if (!dragging || eventData.button != PointerEventData.InputButton.Left) return;
 
+            var overCancelZone = IsOverCancelZone(eventData);
             dragging = false;
-            puzzle.EndConnection();
+            ShowCancelState(false);
+            puzzle.EndConnection(overCancelZone);
         }
 
         private void Update()
@@ -66,16 +73,34 @@ namespace ProjectP.Gameplay.Puzzle
             var escapePressed = Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame;
             if (!rightClicked && !escapePressed) return;
 
-            dragging = false;
-            puzzle.CancelConnection();
+            CancelDrag();
         }
 
         private void OnDisable()
         {
-            if (!dragging) return;
+            if (dragging) CancelDrag();
+        }
 
+        private void CancelDrag()
+        {
             dragging = false;
+            ShowCancelState(false);
             puzzle.CancelConnection();
+        }
+
+        private bool IsOverCancelZone(PointerEventData eventData)
+        {
+            foreach (var zone in cancelZones)
+            {
+                if (zone != null && zone.Contains(eventData.position, eventData.pressEventCamera)) return true;
+            }
+
+            return false;
+        }
+
+        private void ShowCancelState(bool visible)
+        {
+            if (cancelOverlay != null) cancelOverlay.SetVisible(visible);
         }
 
         /// <summary>화면 좌표를 보드 중심 기준 좌표(BoardLayout과 같은 기준)로 바꾼다.</summary>

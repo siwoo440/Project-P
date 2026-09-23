@@ -39,5 +39,6 @@ namespace ProjectP.UI
         public Sprite glow;
         public Sprite gemTile;
         public Sprite gemTileOutline;
+        public Sprite vignette;
     }
 }
