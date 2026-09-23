@@ -1,5 +1,6 @@
 using System;
 using ProjectP.Data;
+using ProjectP.UI;
 using UnityEngine;
 
 namespace ProjectP.Core
@@ -15,6 +16,9 @@ namespace ProjectP.Core
     public class Bootstrapper : MonoBehaviour
     {
         [SerializeField] private GameDatabase database;
+
+        [Tooltip("Boot 화면. 비어 있으면 임시 글자 표시(OnGUI)로 대신한다.")]
+        [SerializeField] private BootScreenView view;
 
         private string status = "시작";
         private string error;
@@ -35,19 +39,19 @@ namespace ProjectP.Core
                 DontDestroyOnLoad(servicesRoot);
 
                 // 순서가 중요하다. 뒤 단계가 앞 단계의 결과를 사용한다.
-                status = "데이터 불러오기";
+                Report(0.1f, "데이터 불러오기");
                 var data = servicesRoot.AddComponent<DataManager>();
                 data.Initialize(database);
 
-                status = "저장 데이터 확인";
+                Report(0.35f, "저장 데이터 확인");
                 var save = servicesRoot.AddComponent<SaveManager>();
                 save.Initialize();
 
-                status = "사운드 준비"; // 설정의 볼륨을 쓰므로 SaveManager 다음이다.
+                Report(0.6f, "사운드 준비"); // 설정의 볼륨을 쓰므로 SaveManager 다음이다.
                 var audio = servicesRoot.AddComponent<AudioManager>();
                 audio.Initialize(save.Settings);
 
-                status = "서비스 등록";
+                Report(0.85f, "서비스 등록");
                 var game = servicesRoot.AddComponent<GameManager>();
                 var scenes = servicesRoot.AddComponent<SceneFlow>();
                 GameServices.Register(data, save, audio, game, scenes);
@@ -56,20 +60,29 @@ namespace ProjectP.Core
             {
                 if (servicesRoot != null) Destroy(servicesRoot);
                 error = $"초기화 실패 — {status}\n{e.Message}";
+                if (view != null) view.ShowError(error);
                 Debug.LogException(e);
                 return;
             }
 
-            status = "완료";
+            Report(1f, "완료");
             if (!EditorBootLoader.TryLoadReturnScene())
             {
                 GameServices.Scenes.Load(SceneNames.Title);
             }
         }
 
-        // 최종 로고·로딩 화면은 아트가 확정된 뒤 교체한다. 지금은 진행 상태와 오류만 표시한다.
+        private void Report(float progress, string newStatus)
+        {
+            status = newStatus;
+            if (view != null) view.ShowProgress(progress, $"{newStatus}...");
+        }
+
+        // Boot 화면(view)이 연결되지 않았을 때만 쓰는 임시 표시.
         private void OnGUI()
         {
+            if (view != null) return;
+
             var style = new GUIStyle(GUI.skin.label)
             {
                 alignment = TextAnchor.MiddleCenter,

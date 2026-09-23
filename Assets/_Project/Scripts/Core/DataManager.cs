@@ -20,6 +20,12 @@ namespace ProjectP.Core
                     "GameDatabase가 연결되지 않았습니다. 00_Boot의 [Bootstrap] 오브젝트 인스펙터를 확인하세요.");
             }
 
+            if (database.Puzzle == null || database.Gems.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    "퍼즐 데이터(PuzzleConfig·GemData)가 GameDatabase에 없습니다. 메뉴 Project P > Build All을 실행하세요.");
+            }
+
             Database = database;
         }
     }

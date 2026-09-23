@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0d92f4c1f8994f1cb1bb963a2d189258, type: 3}
+  m_Name: UITheme
+  m_EditorClassIdentifier: ProjectP.Runtime::ProjectP.UI.UITheme
+  backgroundTop: {r: 0.10980392, g: 0.14117648, b: 0.27058825, a: 1}
+  backgroundBottom: {r: 0.03529412, g: 0.043137256, b: 0.08627451, a: 1}
+  surface: {r: 0.101960786, g: 0.12156863, b: 0.2, a: 0.9607843}
+  surfaceRaised: {r: 0.15686275, g: 0.18431373, b: 0.29803923, a: 1}
+  outline: {r: 0.25882354, g: 0.29803923, b: 0.4509804, a: 1}
+  dim: {r: 0, g: 0, b: 0, a: 0.65}
+  accent: {r: 0.9490196, g: 0.75686276, b: 0.30588236, a: 1}
+  accentText: {r: 0.13333334, g: 0.09411765, b: 0.023529412, a: 1}
+  accentSecondary: {r: 0.30980393, g: 0.7647059, b: 0.96862745, a: 1}
+  danger: {r: 0.8980392, g: 0.28235295, b: 0.3019608, a: 1}
+  textPrimary: {r: 0.95686275, g: 0.94509804, b: 0.9098039, a: 1}
+  textSecondary: {r: 0.65882355, g: 0.6862745, b: 0.78039217, a: 1}
+  rounded: {fileID: 21300000, guid: e099f6834e38ebb469ff8f5d9cd56808, type: 3}
+  roundedOutline: {fileID: 21300000, guid: 6b50b752fd557e247b7dc16e25a603ee, type: 3}
+  shadow: {fileID: 21300000, guid: 299861ef2571cc5439280f451f3fa1f8, type: 3}
+  circle: {fileID: 21300000, guid: b15f313c30e86e6488e329d652216b74, type: 3}
+  backgroundGradient: {fileID: 21300000, guid: 9eb9d3457c005a94a86e6de4c2a24b03, type: 3}
+  glow: {fileID: 21300000, guid: 05e2d70ab96a4a84394072c097533b53, type: 3}
+  gemTile: {fileID: 21300000, guid: 9d232988a056a2c4e95bd05fea14c933, type: 3}

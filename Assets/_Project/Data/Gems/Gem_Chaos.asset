@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5e7faf238aa842b2ac0246806328064b, type: 3}
+  m_Name: Gem_Chaos
+  m_EditorClassIdentifier: ProjectP.Runtime::ProjectP.Data.GemData
+  type: 3
+  displayName: "\uD63C\uB3C8"
+  color: {r: 0.41960785, g: 0.24705882, b: 0.76862746, a: 1}
+  iconColor: {r: 1, g: 1, b: 1, a: 1}
+  icon: {fileID: 21300000, guid: d71ec40ef59de664ca4afc424130ffc6, type: 3}
+  spawnWeight: 20

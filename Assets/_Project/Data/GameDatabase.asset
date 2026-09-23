@@ -12,3 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 646bda180a1a41b39219c0a4ae847c1e, type: 3}
   m_Name: GameDatabase
   m_EditorClassIdentifier: 
+  puzzleConfig: {fileID: 11400000, guid: 181020c00d67fc247afe338b9b648f5b, type: 2}
+  gems:
+  - {fileID: 11400000, guid: 8dd7a24f24a0a14418cc6c01d8c8656f, type: 2}
+  - {fileID: 11400000, guid: c4084ba527264124fbe12e4173dfac9c, type: 2}
+  - {fileID: 11400000, guid: 8f2df785506c4bf4e916b3f0dd3e3b1c, type: 2}
+  - {fileID: 11400000, guid: 8d37c0ed8f8c094499cee8069e8d1732, type: 2}
+  - {fileID: 11400000, guid: 227e26c1b489c0042970821b1fd0196e, type: 2}
