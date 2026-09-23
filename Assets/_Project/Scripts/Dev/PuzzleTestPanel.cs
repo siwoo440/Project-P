@@ -37,6 +37,7 @@ namespace ProjectP.Dev
         [SerializeField] private TMP_Text actionPointBaseText;
 
         private readonly LinkedList<string> log = new LinkedList<string>();
+        private string pendingPath;
 
         private void OnEnable()
         {
@@ -44,12 +45,14 @@ namespace ProjectP.Dev
             puzzle.TurnStateChanged += RefreshTurn;
             puzzle.ConnectionChanged += OnConnectionChanged;
             puzzle.ConnectionConfirmed += OnConnectionConfirmed;
+            puzzle.EffectsResolved += OnEffectsResolved;
             puzzle.ConnectionWasted += OnConnectionWasted;
             puzzle.ConnectionCanceled += OnConnectionCanceled;
         }
 
         private void OnDisable()
         {
+            puzzle.EffectsResolved -= OnEffectsResolved;
             puzzle.BoardChanged -= Refresh;
             puzzle.TurnStateChanged -= RefreshTurn;
             puzzle.ConnectionChanged -= OnConnectionChanged;
@@ -111,10 +114,23 @@ namespace ProjectP.Dev
 
         private void OnConnectionCanceled() => connectionStatusText.text = "취소됨 · 턴 유지";
 
+        // 사용 직후 효과 결과표가 이어서 오므로, 경로 표시를 잠시 들고 있다가 효과와 함께 기록한다.
         private void OnConnectionConfirmed(IReadOnlyList<BoardPosition> positions)
         {
             connectionStatusText.text = IdleStatus;
-            AddLog($"{Describe(positions)}  <color=#F2C14E>{positions.Count}개 사용</color>");
+            pendingPath = Describe(positions);
+        }
+
+        private void OnEffectsResolved(EffectSummary summary)
+        {
+            var parts = new List<string>();
+            if (summary.TotalDamage > 0) parts.Add($"<color=#FF6E6E>피해 {summary.TotalDamage}</color>");
+            if (summary.Heal > 0) parts.Add($"<color=#50DC96>회복 {summary.Heal}</color>");
+            if (summary.Delay > 0) parts.Add($"<color=#B496FF>지연+{summary.Delay}</color>");
+            if (summary.NextTurnActionPoints > 0) parts.Add($"<color=#4FC3F7>행동력+{summary.NextTurnActionPoints}</color>");
+
+            AddLog($"{pendingPath} → {(parts.Count > 0 ? string.Join(" · ", parts) : "효과 없음")}");
+            pendingPath = null;
         }
 
         private void OnConnectionWasted(IReadOnlyList<BoardPosition> positions)

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using ProjectP.Data;
 using ProjectP.Dev;
 using ProjectP.Gameplay.Puzzle;
@@ -26,7 +27,7 @@ namespace ProjectP.EditorTools
         private const float Spacing = 4f;
         private const float BoardPadding = 26f;
 
-        // 상단 카드 3개: 시드 / 보석 분포 / 연결 기록
+        // 상단 카드 3개: 시드 / 허수아비 / 연결 기록. 보석 분포는 보드 오른쪽 세로 패널(사용자 요청으로 자리 바꿈).
         private static readonly Vector2 CardSize = new Vector2(580f, 230f);
         private const float CardY = 282f;
         private const float CardGap = 620f;
@@ -64,7 +65,6 @@ namespace ProjectP.EditorTools
 
             var top = BuildTopBar(ui, root.transform);
             var (seedText, seedInput, seedButton, regenerateButton) = BuildSeedCard(ui, root.transform);
-            var (statTexts, summary) = BuildStatsCard(ui, root.transform, database);
             var (statusText, logText) = BuildLogCard(ui, root.transform);
 
             // 보드 카드: 행·열 수는 PuzzleConfig를 따른다.
@@ -72,6 +72,11 @@ namespace ProjectP.EditorTools
             var boardSize = new Vector2(config.Columns * pitch - Spacing, config.Rows * pitch - Spacing);
             var cardSize = boardSize + Vector2.one * (BoardPadding * 2f);
             var cardY = -540f + 36f + cardSize.y / 2f;
+            var sideX = cardSize.x / 2f + 42f + SidePanelSize.x / 2f;
+
+            // 보석 분포: 보드 오른쪽 세로 패널 (허수아비와 자리를 바꿈, 사용자 요청).
+            var (statTexts, summary) = BuildStatsPanel(ui, root.transform, database, new Vector2(sideX, cardY));
+
             var boardCard = ui.Card("BoardCard", root.transform, cardSize, new Vector2(0f, cardY));
 
             // 보드 영역: 칸 표시 + 마우스 입력. 입력을 받으려면 투명 Graphic이 필요하다.
@@ -109,6 +114,9 @@ namespace ProjectP.EditorTools
                 "드래그해 잇고 놓으면 사용  ·  1개만 놓아도 턴 소모  ·  보드 양옆 바깥에서 화면이 붉어질 때 놓으면 취소  ·  우클릭 / ESC 취소",
                 20f, theme.textSecondary);
             UIFactory.AnchorBottom(hint.rectTransform, new Vector2(1700f, 28f), 4f);
+
+            // 보석 효과 확인: 보드 왼쪽 메인 캐릭터, 상단 가운데 허수아비, 떠오르는 숫자 층.
+            BuildEffectPanels(ui, root, puzzle, new Vector2(-sideX, cardY));
 
             // 취소 상태 표시: 화면 맨 위에 겹치는 붉은 막. 입력은 막지 않는다.
             var cancelOverlay = BuildCancelOverlay(ui, root.transform);
@@ -242,34 +250,34 @@ namespace ProjectP.EditorTools
             return (seed, input, seedButton, regenerate);
         }
 
-        private static (TMP_Text[] counts, TMP_Text summary) BuildStatsCard(UIFactory ui, Transform parent, GameDatabase database)
+        /// <summary>보석 분포 세로 패널: 제목 · "6 × 12 · 72칸" · 종류별 한 줄 [보석] [이름] [N개 · N%].</summary>
+        private static (TMP_Text[] counts, TMP_Text summary) BuildStatsPanel(UIFactory ui, Transform parent, GameDatabase database, Vector2 position)
         {
             var theme = ui.Theme;
-            var card = ui.Card("StatsCard", parent, CardSize, new Vector2(0f, CardY));
-            CardHeader(ui, card, "보석 분포");
+            var panel = ui.Card("StatsPanel", parent, SidePanelSize, position);
+            SidePanelHeader(ui, panel, "보석 분포");
 
-            var summary = ui.Text("Summary", card, "", 22f, theme.textSecondary, alignment: TextAlignmentOptions.MidlineRight);
-            UIFactory.Anchor(summary.rectTransform, new Vector2(1f, 1f), new Vector2(300f, 36f), new Vector2(-28f, -22f));
-
-            var columns = UIFactory.Rect("Columns", card);
-            UIFactory.AnchorBottom(columns, new Vector2(552f, 140f), 22f);
-            UIFactory.Row(columns, 8f);
+            var summary = ui.Text("Summary", panel, "", 20f, theme.textSecondary);
+            UIFactory.AnchorTop(summary.rectTransform, new Vector2(252f, 26f), 58f);
+            ui.Divider(panel, 252f, 96f);
 
             var texts = new List<TMP_Text>();
-            foreach (var type in StatTypes)
+            for (var i = 0; i < StatTypes.Length; i++)
             {
+                var type = StatTypes[i];
                 var gem = database.GetGem(type);
-                var column = UIFactory.Rect(type.ToString(), columns);
-                column.sizeDelta = new Vector2(104f, 140f);
-                UIFactory.Column(column, 4f);
+                var row = UIFactory.Rect(type.ToString(), panel);
+                UIFactory.AnchorTop(row, new Vector2(252f, 56f), 114f + i * 68f);
+                UIFactory.Row(row, 12f, TextAnchor.MiddleLeft);
 
-                ui.GemBadge("Badge", column, gem, 56f);
+                ui.GemBadge("Badge", row, gem, 48f);
 
-                var name = ui.Text("Name", column, gem != null ? gem.DisplayName : type.ToString(), 24f, theme.textPrimary, FontStyles.Bold);
-                name.rectTransform.sizeDelta = new Vector2(104f, 32f);
+                var name = ui.Text("Name", row, gem != null ? gem.DisplayName : type.ToString(), 24f, theme.textPrimary, FontStyles.Bold,
+                    TextAlignmentOptions.MidlineLeft);
+                name.rectTransform.sizeDelta = new Vector2(70f, 40f);
 
-                var count = ui.Text("Count", column, "-", 22f, theme.accent);
-                count.rectTransform.sizeDelta = new Vector2(104f, 30f);
+                var count = ui.Text("Count", row, "-", 22f, theme.accent, alignment: TextAlignmentOptions.MidlineRight);
+                count.rectTransform.sizeDelta = new Vector2(110f, 40f);
                 texts.Add(count);
             }
 
@@ -285,9 +293,11 @@ namespace ProjectP.EditorTools
             var status = ui.Text("Status", card, "", 22f, theme.accentSecondary, alignment: TextAlignmentOptions.MidlineRight);
             UIFactory.Anchor(status.rectTransform, new Vector2(1f, 1f), new Vector2(320f, 36f), new Vector2(-28f, -22f));
 
-            var log = ui.Text("Log", card, "", 24f, theme.textPrimary, alignment: TextAlignmentOptions.TopLeft);
+            var log = ui.Text("Log", card, "", 22f, theme.textPrimary, alignment: TextAlignmentOptions.TopLeft);
             UIFactory.Anchor(log.rectTransform, new Vector2(0f, 1f), new Vector2(524f, 150f), new Vector2(28f, -68f));
             log.richText = true;
+            log.textWrappingMode = TextWrappingModes.NoWrap; // 한 기록 = 한 줄. 길면 말줄임
+            log.overflowMode = TextOverflowModes.Ellipsis;
             return (status, log);
         }
 
@@ -352,6 +362,181 @@ namespace ProjectP.EditorTools
             SetColor(view, "bonusColor", theme.accentSecondary);
             SetColor(view, "previewColor", BootUIBuilder.WithAlpha(theme.accent, 0.28f));
             SetColor(view, "spentColor", theme.outline);
+        }
+
+        private static readonly Vector2 SidePanelSize = new Vector2(300f, 470f);
+
+        /// <summary>
+        /// 보석 효과 확인 화면(개발용): 보드 왼쪽 메인 캐릭터(HP·임시 스탯 −/+·HP −20),
+        /// 상단 가운데 허수아비 3마리(왼쪽부터 순번 0·1·2, HP·행동 카운트·되살리기). 실제 전투처럼 적이 보드 위에 선다.
+        /// 메인 패널은 보이지 않는 취소 영역 위에 있다(그 위에서 놓으면 취소).
+        /// </summary>
+        private static void BuildEffectPanels(UIFactory ui, GameObject root, PuzzleManager puzzle, Vector2 mainPosition)
+        {
+            var theme = ui.Theme;
+            var healColor = new Color32(48, 192, 122, 255);
+
+            // 메인 캐릭터
+            var main = ui.Card("MainPanel", root.transform, SidePanelSize, mainPosition);
+            SidePanelHeader(ui, main, "메인 캐릭터");
+            var (mainHpText, mainBar, mainFill) = HpRow(ui, main, healColor);
+            ui.Divider(main, 252f, 146f);
+
+            var statNames = new[] { "물리 공격", "마법 공격", "회복력" };
+            var statTexts = new Object[3];
+            var minusButtons = new Object[3];
+            var plusButtons = new Object[3];
+            for (var i = 0; i < statNames.Length; i++)
+            {
+                var row = UIFactory.Rect($"Stat{i}", main);
+                UIFactory.AnchorTop(row, new Vector2(252f, 44f), 166f + i * 56f);
+                UIFactory.Row(row, 12f, TextAnchor.MiddleLeft);
+
+                ui.Text("Label", row, statNames[i], 22f, theme.textSecondary, alignment: TextAlignmentOptions.MidlineLeft)
+                    .rectTransform.sizeDelta = new Vector2(96f, 44f);
+                var minus = ui.Button("Minus", row, "-", ButtonStyle.Secondary, 26f);
+                ((RectTransform)minus.transform).sizeDelta = new Vector2(44f, 44f);
+                var value = ui.Text("Value", row, "0", 26f, theme.accent, FontStyles.Bold);
+                value.rectTransform.sizeDelta = new Vector2(32f, 44f);
+                var plus = ui.Button("Plus", row, "+", ButtonStyle.Secondary, 26f);
+                ((RectTransform)plus.transform).sizeDelta = new Vector2(44f, 44f);
+
+                statTexts[i] = value;
+                minusButtons[i] = minus;
+                plusButtons[i] = plus;
+            }
+
+            var hurt = ui.Button("HurtButton", main, "HP -20", ButtonStyle.Secondary, 24f);
+            UIFactory.AnchorBottom((RectTransform)hurt.transform, new Vector2(252f, 52f), 24f);
+
+            // 허수아비 3마리: 상단 가운데 카드(원래 보석 분포 자리). 클릭하면 공격 대상. 왼쪽부터 순번 0·1·2.
+            var enemies = ui.Card("DummyPanel", root.transform, CardSize, new Vector2(0f, CardY));
+            CardHeader(ui, enemies, "허수아비");
+            var clickHint = ui.Text("ClickHint", enemies, "클릭해 공격 대상 지정", 18f, theme.textSecondary, alignment: TextAlignmentOptions.MidlineLeft);
+            UIFactory.Anchor(clickHint.rectTransform, new Vector2(0f, 1f), new Vector2(200f, 36f), new Vector2(150f, -22f));
+
+            var revive = ui.Button("ReviveButton", enemies, "모두 되살리기", ButtonStyle.Secondary, 20f);
+            UIFactory.Anchor((RectTransform)revive.transform, new Vector2(1f, 1f), new Vector2(150f, 40f), new Vector2(-20f, -16f));
+
+            // 칸 위치: 제목 줄(16~58) 아래. 칸 윗변에 걸치는 "대상" 표시(칸 위 26px)가 제목 줄과 겹치지 않게 86부터.
+            var rows = new DummyRow[DummyNames.Length];
+            var pitch = DummyRowSize.x + DummyRowGap;
+            for (var i = 0; i < DummyNames.Length; i++)
+            {
+                var x = (i - (DummyNames.Length - 1) / 2f) * pitch;
+                rows[i] = BuildDummyRow(ui, enemies, DummyNames[i], new Vector2(x, 86f));
+            }
+
+            // 떠오르는 숫자는 패널 위에 그린다.
+            var floatRoot = UIFactory.Rect("FloatText", root.transform);
+            UIFactory.Stretch(floatRoot);
+
+            var panel = root.AddComponent<EffectTestPanel>();
+            UIFactory.Wire(panel,
+                ("puzzle", puzzle),
+                ("mainHpFill", mainFill), ("mainHpText", mainHpText), ("mainFloatAnchor", mainBar), ("hurtButton", hurt),
+                ("reviveButton", revive), ("floatRoot", floatRoot));
+            UIFactory.WireArray(panel, "statTexts", statTexts);
+            UIFactory.WireArray(panel, "statMinusButtons", minusButtons);
+            UIFactory.WireArray(panel, "statPlusButtons", plusButtons);
+            UIFactory.WireArray(panel, "dummyButtons", rows.Select(row => (Object)row.Button).ToArray());
+            UIFactory.WireArray(panel, "dummyHpFills", rows.Select(row => (Object)row.HpFill).ToArray());
+            UIFactory.WireArray(panel, "dummyHpTexts", rows.Select(row => (Object)row.HpText).ToArray());
+            UIFactory.WireArray(panel, "dummyCountTexts", rows.Select(row => (Object)row.CountText).ToArray());
+            UIFactory.WireArray(panel, "dummyBorders", rows.Select(row => (Object)row.Border).ToArray());
+            UIFactory.WireArray(panel, "dummyTargetMarks", rows.Select(row => (Object)row.TargetMark).ToArray());
+            UIFactory.WireArray(panel, "dummyGroups", rows.Select(row => (Object)row.Group).ToArray());
+            SetColor(panel, "healColor", new Color32(80, 220, 150, 255));
+            SetColor(panel, "actionPointColor", theme.accentSecondary);
+            SetColor(panel, "targetBorderColor", theme.accent);
+            SetColor(panel, "normalBorderColor", theme.outline);
+        }
+
+        private static readonly string[] DummyNames = { "허수아비 A", "허수아비 B", "허수아비 C" };
+        // 카드 너비 580 = 여백 20 + 칸 172 × 3 + 간격 12 × 2 + 여백 20
+        private static readonly Vector2 DummyRowSize = new Vector2(172f, 118f);
+        private const float DummyRowGap = 12f;
+
+        private readonly struct DummyRow
+        {
+            public DummyRow(Button button, RectTransform hpFill, TMP_Text hpText, TMP_Text countText, Image border, GameObject targetMark, CanvasGroup group)
+            {
+                Button = button;
+                HpFill = hpFill;
+                HpText = hpText;
+                CountText = countText;
+                Border = border;
+                TargetMark = targetMark;
+                Group = group;
+            }
+
+            public Button Button { get; }
+            public RectTransform HpFill { get; }
+            public TMP_Text HpText { get; }
+            public TMP_Text CountText { get; }
+            public Image Border { get; }
+            public GameObject TargetMark { get; }
+            public CanvasGroup Group { get; }
+        }
+
+        /// <summary>허수아비 한 칸: [이름 · 행동까지 N턴] [HP 막대] [HP 숫자]. 칸 전체가 버튼이고, 대상이면 금색 테두리 + "대상" 표시.</summary>
+        /// <param name="position">x = 카드 가운데 기준 가로 위치, y = 카드 윗변에서 내려온 거리</param>
+        private static DummyRow BuildDummyRow(UIFactory ui, RectTransform parent, string name, Vector2 position)
+        {
+            var theme = ui.Theme;
+            var row = UIFactory.Rect(name, parent);
+            UIFactory.Anchor(row, new Vector2(0.5f, 1f), DummyRowSize, new Vector2(position.x, -position.y));
+            var group = row.gameObject.AddComponent<CanvasGroup>();
+
+            var body = UIFactory.Image("Body", row, theme.rounded, theme.surfaceRaised, sliced: true, raycast: true);
+            UIFactory.Stretch(body.rectTransform);
+            var border = UIFactory.Image("Border", row, theme.roundedOutline, theme.outline, sliced: true);
+            UIFactory.Stretch(border.rectTransform);
+
+            var button = row.gameObject.AddComponent<Button>();
+            button.targetGraphic = body;
+            button.transition = Selectable.Transition.ColorTint;
+            button.colors = UIFactory.StandardColors;
+
+            // 세로로 가운데 정렬: 이름 → 행동까지 N턴 → HP 막대 → HP 숫자
+            var inner = DummyRowSize.x - 28f;
+            var title = ui.Text("Name", row, name, 22f, theme.textPrimary, FontStyles.Bold);
+            UIFactory.AnchorTop(title.rectTransform, new Vector2(inner, 28f), 12f);
+
+            var count = ui.Text("Count", row, "-", 18f, theme.accent, FontStyles.Bold);
+            UIFactory.AnchorTop(count.rectTransform, new Vector2(inner, 24f), 42f);
+
+            var (bar, fill) = ui.Bar("HpBar", row, new Vector2(inner, 12f), theme.danger);
+            UIFactory.AnchorTop(bar, new Vector2(inner, 12f), 72f);
+
+            var hp = ui.Text("Hp", row, "-", 18f, theme.textSecondary);
+            UIFactory.AnchorTop(hp.rectTransform, new Vector2(inner, 22f), 88f);
+
+            // 대상 표시: 칸 윗변에 걸친 금색 알약.
+            var mark = ui.Pill("TargetMark", row, "대상", theme.accent, new Vector2(64f, 26f));
+            UIFactory.Anchor(mark, new Vector2(0.5f, 1f), mark.sizeDelta, new Vector2(0f, 13f));
+
+            return new DummyRow(button, fill, hp, count, border, mark.gameObject, group);
+        }
+
+        private static void SidePanelHeader(UIFactory ui, RectTransform panel, string text)
+        {
+            var header = ui.Text("Header", panel, text, 26f, ui.Theme.textPrimary, FontStyles.Bold);
+            UIFactory.AnchorTop(header.rectTransform, new Vector2(252f, 36f), 20f);
+        }
+
+        /// <summary>"HP  60 / 100" 한 줄 + 그 아래 막대.</summary>
+        private static (TMP_Text value, RectTransform bar, RectTransform fill) HpRow(UIFactory ui, RectTransform panel, Color fillColor)
+        {
+            var label = ui.Text("HpLabel", panel, "HP", 24f, ui.Theme.textSecondary, FontStyles.Bold, TextAlignmentOptions.MidlineLeft);
+            UIFactory.Anchor(label.rectTransform, new Vector2(0f, 1f), new Vector2(100f, 36f), new Vector2(24f, -64f));
+
+            var value = ui.Text("HpValue", panel, "-", 26f, ui.Theme.textPrimary, FontStyles.Bold, TextAlignmentOptions.MidlineRight);
+            UIFactory.Anchor(value.rectTransform, new Vector2(1f, 1f), new Vector2(170f, 36f), new Vector2(-24f, -64f));
+
+            var (bar, fill) = ui.Bar("HpBar", panel, new Vector2(252f, 18f), fillColor);
+            UIFactory.AnchorTop(bar, new Vector2(252f, 18f), 108f);
+            return (value, bar, fill);
         }
 
         /// <summary>

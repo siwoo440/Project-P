@@ -160,6 +160,21 @@ namespace ProjectP.EditorTools
         // ---------------------------------------------------------------- 조작 부품
 
         /// <summary>
+        /// 버튼·토글 공통 색 반응. 색 곱하기는 원래 색보다 밝게 만들 수 없으므로 평소를 약간 어둡게, 올리면 원래 색으로 둔다.
+        /// 클릭 뒤 "선택됨" 상태가 남지 않도록 selected는 평소와 같게 둔다.
+        /// </summary>
+        public static ColorBlock StandardColors => new ColorBlock
+        {
+            normalColor = new Color(0.9f, 0.9f, 0.9f, 1f),
+            highlightedColor = Color.white,
+            pressedColor = new Color(0.72f, 0.72f, 0.72f, 1f),
+            selectedColor = new Color(0.9f, 0.9f, 0.9f, 1f),
+            disabledColor = new Color(0.55f, 0.55f, 0.55f, 0.45f),
+            colorMultiplier = 1f,
+            fadeDuration = 0.08f
+        };
+
+        /// <summary>
         /// 버튼. 구조: 루트(Button) → Shadow, Body(색이 바뀌는 부분), Label.
         /// 부모가 자식보다 먼저 그려지므로 그림자를 자식으로 두고 루트에는 그래픽을 두지 않는다.
         /// </summary>
@@ -193,16 +208,7 @@ namespace ProjectP.EditorTools
 
             button.targetGraphic = body;
             button.transition = Selectable.Transition.ColorTint;
-            button.colors = new ColorBlock
-            {
-                normalColor = new Color(0.9f, 0.9f, 0.9f, 1f),
-                highlightedColor = Color.white,
-                pressedColor = new Color(0.72f, 0.72f, 0.72f, 1f),
-                selectedColor = new Color(0.9f, 0.9f, 0.9f, 1f),
-                disabledColor = new Color(0.55f, 0.55f, 0.55f, 0.45f),
-                colorMultiplier = 1f,
-                fadeDuration = 0.08f
-            };
+            button.colors = StandardColors;
 
             var fade = root.gameObject.AddComponent<SelectableLabelFade>();
             Wire(fade, ("label", text));
@@ -248,6 +254,26 @@ namespace ProjectP.EditorTools
             return slider;
         }
 
+        /// <summary>
+        /// 막대(HP 등). 채움은 왼쪽 기준이며 실행 중 fill.anchorMax.x를 비율(0~1)로 바꿔 쓴다.
+        /// 반환: 막대 전체(track)와 채움(fill).
+        /// </summary>
+        public (RectTransform track, RectTransform fill) Bar(string name, Transform parent, Vector2 size, Color fillColor)
+        {
+            var track = Image(name, parent, Theme.rounded, Theme.surfaceRaised, sliced: true);
+            track.pixelsPerUnitMultiplier = 2f;
+            track.rectTransform.sizeDelta = size;
+
+            var fill = Image("Fill", track.transform, Theme.rounded, fillColor, sliced: true);
+            fill.pixelsPerUnitMultiplier = 2f;
+            fill.rectTransform.anchorMin = Vector2.zero;
+            fill.rectTransform.anchorMax = Vector2.one;
+            fill.rectTransform.pivot = new Vector2(0f, 0.5f);
+            fill.rectTransform.offsetMin = Vector2.zero;
+            fill.rectTransform.offsetMax = Vector2.zero;
+            return (track.rectTransform, fill.rectTransform);
+        }
+
         /// <summary>체크 상자 + 글자. 켜지면 상자 안이 강조색으로 채워진다. size는 전체 크기(상자 + 글자).</summary>
         public Toggle Toggle(string name, Transform parent, string label, Vector2 size, float fontSize = 24f)
         {
@@ -273,16 +299,7 @@ namespace ProjectP.EditorTools
             toggle.targetGraphic = box;
             toggle.graphic = check;
             toggle.isOn = true;
-            toggle.colors = new ColorBlock
-            {
-                normalColor = new Color(0.9f, 0.9f, 0.9f, 1f),
-                highlightedColor = Color.white,
-                pressedColor = new Color(0.72f, 0.72f, 0.72f, 1f),
-                selectedColor = new Color(0.9f, 0.9f, 0.9f, 1f),
-                disabledColor = new Color(0.55f, 0.55f, 0.55f, 0.45f),
-                colorMultiplier = 1f,
-                fadeDuration = 0.08f
-            };
+            toggle.colors = StandardColors;
             return toggle;
         }
 

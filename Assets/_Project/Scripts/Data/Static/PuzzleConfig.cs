@@ -21,6 +21,24 @@ namespace ProjectP.Data
         [Tooltip("기본 행동력. 보석 1개를 이을 때마다 1을 쓴다. 기획서 5.4")]
         [Min(1)] [SerializeField] private int baseActionPoints = 6;
 
+        [Header("보석 효과 (기획서 5.2 공란 → 제안값)")]
+        [Tooltip("혼돈 보석 1개당 대상 적 행동 지연")]
+        [Min(0)] [SerializeField] private int chaosDelayPerGem = 1;
+
+        [Tooltip("한 번 연결로 줄 수 있는 행동 지연 최대치")]
+        [Min(0)] [SerializeField] private int maxChaosDelay = 2;
+
+        [Tooltip("균형 보석 1개당 다음 턴 행동력")]
+        [Min(0)] [SerializeField] private int balanceActionPointsPerGem = 1;
+
+        [Tooltip("다음 턴 행동력 보너스 최대치")]
+        [Min(0)] [SerializeField] private int maxNextTurnActionPoints = 3;
+
+        public int ChaosDelayPerGem => chaosDelayPerGem;
+        public int MaxChaosDelay => maxChaosDelay;
+        public int BalanceActionPointsPerGem => balanceActionPointsPerGem;
+        public int MaxNextTurnActionPoints => maxNextTurnActionPoints;
+
         public int Rows => rows;
         public int Columns => columns;
         public int MinConnection => minConnection;

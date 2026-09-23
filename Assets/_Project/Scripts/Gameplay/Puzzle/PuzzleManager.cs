@@ -31,8 +31,14 @@ namespace ProjectP.Gameplay.Puzzle
         private ConnectionPath path;
         private PuzzleTurn turn;
         private System.Random refillRandom;
+        private GemEffectSettings effectSettings;
 
         public Board Board { get; private set; }
+
+        /// <summary>
+        /// 보석 효과 계산에 쓰는 메인 캐릭터 스탯(기획서 6.1). 전투(11일차~)나 퍼즐 테스트가 넣는다.
+        /// </summary>
+        public CombatStats Stats { get; set; }
         public int Seed { get; private set; }
 
         /// <summary>현재 그리고 있는 연결 경로 (읽기 전용).</summary>
@@ -73,6 +79,15 @@ namespace ProjectP.Gameplay.Puzzle
         /// <summary>2개 이상으로 놓아 보석을 사용했을 때. 이 직후 제거·낙하 연출이 시작된다.</summary>
         public event Action<IReadOnlyList<BoardPosition>> ConnectionConfirmed;
 
+        /// <summary>
+        /// 사용한 경로의 보석 효과 결과표. 순서대로 처리된 효과와 합계가 들어 있다(기획서 5.5).
+        /// 피해·회복·지연은 받는 쪽(전투·퍼즐 테스트)이 적용한다. 균형 보너스는 PuzzleManager가 다음 턴 행동력에 바로 반영한다.
+        /// </summary>
+        public event Action<EffectSummary> EffectsResolved;
+
+        /// <summary>새 턴이 시작될 때 턴 번호와 함께 호출된다.</summary>
+        public event Action<int> TurnStarted;
+
         /// <summary>2개 미만으로 놓아 효과 없이 턴만 소모했을 때.</summary>
         public event Action<IReadOnlyList<BoardPosition>> ConnectionWasted;
 
@@ -89,6 +104,11 @@ namespace ProjectP.Gameplay.Puzzle
 
             database = GameServices.Data.Database;
             generator = new BoardGenerator(database.Gems.Where(gem => gem != null).Select(gem => (gem.Type, gem.SpawnWeight)));
+
+            var config = database.Puzzle;
+            effectSettings = new GemEffectSettings(
+                database.Gems.Where(gem => gem != null).ToDictionary(gem => gem.Type, gem => gem.EffectCoefficient),
+                config.ChaosDelayPerGem, config.MaxChaosDelay, config.BalanceActionPointsPerGem, config.MaxNextTurnActionPoints);
             Regenerate();
         }
 
@@ -104,7 +124,7 @@ namespace ProjectP.Gameplay.Puzzle
             Seed = seed ?? UnityEngine.Random.Range(0, 1_000_000);
             Board = generator.Generate(config.Rows, config.Columns, Seed);
             refillRandom = new System.Random(unchecked(Seed * 31 + 7)); // 같은 시드 = 같은 보충 순서
-            turn = new PuzzleTurn(new ActionPoints(turn?.ActionPoints.Base ?? config.BaseActionPoints));
+            turn = new PuzzleTurn(new ActionPoints(turn?.ActionPoints.Base ?? config.BaseActionPoints, config.MaxNextTurnActionPoints));
             path = new ConnectionPath(Board, config.MinConnection);
 
             boardView.Render(Board, database.GetGem);
@@ -121,6 +141,7 @@ namespace ProjectP.Gameplay.Puzzle
             turn.StartTurn();
             path.MaxLength = turn.ActionPoints.Current;
             boardView.SetLocked(false);
+            TurnStarted?.Invoke(turn.Number);
             TurnStateChanged?.Invoke();
         }
 
@@ -176,6 +197,7 @@ namespace ProjectP.Gameplay.Puzzle
                     path.TryConfirm(out var confirmed);
                     turn.MarkActed();
                     ConnectionConfirmed?.Invoke(confirmed);
+                    ApplyEffects(confirmed);
                     Resolve(confirmed);
                     break;
             }
@@ -188,6 +210,19 @@ namespace ProjectP.Gameplay.Puzzle
 
             path.Cancel();
             ConnectionCanceled?.Invoke();
+        }
+
+        /// <summary>
+        /// 사용한 보석의 효과를 연결 순서대로 계산해 알린다(기획서 5.5). 보석이 사라지기 전에 종류를 읽어야 한다.
+        /// 균형 보석의 다음 턴 행동력은 여기서 바로 반영한다.
+        /// </summary>
+        private void ApplyEffects(IReadOnlyList<BoardPosition> used)
+        {
+            var gems = used.Select(position => Board[position]).ToList();
+            var summary = GemEffectResolver.Resolve(gems, Stats, effectSettings);
+
+            if (summary.NextTurnActionPoints > 0) turn.ActionPoints.AddNextTurnBonus(summary.NextTurnActionPoints);
+            EffectsResolved?.Invoke(summary);
         }
 
         /// <summary>사용한 보석을 없애고 남은 보석을 내린 뒤 위에서 새 보석을 채운다. 기획서 5.1</summary>

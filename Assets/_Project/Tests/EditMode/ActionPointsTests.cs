@@ -47,6 +47,18 @@ namespace ProjectP.Tests.EditMode
         }
 
         [Test]
+        public void NextTurnBonus_StopsAtMax()
+        {
+            var points = new ActionPoints(6, maxNextTurnBonus: 3);
+            points.AddNextTurnBonus(2);
+            points.AddNextTurnBonus(2);
+            Assert.AreEqual(3, points.NextTurnBonus, "상한 +3을 넘지 않는다");
+
+            points.StartTurn();
+            Assert.AreEqual(9, points.Current);
+        }
+
+        [Test]
         public void UnusedPoints_DoNotCarryOver()
         {
             var points = new ActionPoints(6);

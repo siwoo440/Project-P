@@ -12,10 +12,16 @@ namespace ProjectP.Gameplay.Puzzle
     /// </summary>
     public sealed class ActionPoints
     {
-        public ActionPoints(int baseValue)
+        public ActionPoints(int baseValue, int maxNextTurnBonus = int.MaxValue)
         {
+            if (maxNextTurnBonus < 0) throw new ArgumentOutOfRangeException(nameof(maxNextTurnBonus), maxNextTurnBonus, "보너스 상한은 0 이상이어야 합니다.");
+
             SetBase(baseValue);
+            MaxNextTurnBonus = maxNextTurnBonus;
         }
+
+        /// <summary>다음 턴 보너스 최대치. 균형 보석·스킬이 아무리 쌓아도 이 값을 넘지 않는다. 기획서 5.2 공란 → +3</summary>
+        public int MaxNextTurnBonus { get; }
 
         /// <summary>기본 행동력. 기획서 5.4 — 6.</summary>
         public int Base { get; private set; }
@@ -38,7 +44,7 @@ namespace ProjectP.Gameplay.Puzzle
         public void AddNextTurnBonus(int amount)
         {
             if (amount < 0) throw new ArgumentOutOfRangeException(nameof(amount), amount, "보너스는 0 이상이어야 합니다.");
-            NextTurnBonus += amount;
+            NextTurnBonus = Math.Min(MaxNextTurnBonus, NextTurnBonus + amount);
         }
 
         /// <summary>새 턴 행동력을 계산한다. 반영한 보너스는 비운다. 남은 행동력은 버린다(이월 없음).</summary>

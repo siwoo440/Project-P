@@ -19,11 +19,15 @@ namespace ProjectP.Data
         [Tooltip("무작위 생성 가중치. 0이면 무작위로 나오지 않는다. 기획서 5.2 공란 → 5종 균등(20)으로 시작.")]
         [Min(0)] [SerializeField] private int spawnWeight = 20;
 
+        [Tooltip("효과 계수. 물리·마법·회복 보석 1개 = 메인 스탯 × 계수. 혼돈·균형은 PuzzleConfig 수치를 쓴다. 기획서 5.2 공란 → 1.0")]
+        [Min(0f)] [SerializeField] private float effectCoefficient = 1f;
+
         public GemType Type => type;
         public string DisplayName => displayName;
         public Color Color => color;
         public Color IconColor => iconColor;
         public Sprite Icon => icon;
         public int SpawnWeight => spawnWeight;
+        public float EffectCoefficient => effectCoefficient;
     }
 }
