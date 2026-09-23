@@ -35,9 +35,17 @@ namespace ProjectP.Data
 
         // --- 이어하기용 스냅샷 ---
         /// <summary>
+        /// 진행 중인 스테이지가 있는지 여부. 이어하기 판정은 반드시 이 값으로 한다.
+        ///
+        /// suspendedSession의 null로 판정하면 안 된다. JsonUtility(Unity 직렬화)는
+        /// 커스텀 클래스 필드의 null을 보존하지 못하고, 불러올 때 빈 객체로 채운다.
+        /// </summary>
+        public bool hasSuspendedSession;
+
+        /// <summary>
         /// 방 진입 직전 시점의 SessionData 사본.
         /// 게임 재실행 시 이 지점부터 재개한다. 기획서 11.1, 12.8
-        /// null이면 진행 중인 스테이지가 없다는 뜻이다.
+        /// hasSuspendedSession이 false면 내용을 무시한다.
         ///
         /// 주의: 패배 재도전(기획서 6.6)도 같은 스냅샷을 되감아 처리한다.
         ///       재도전용 사본은 Gameplay가 메모리에도 들고 있어야 한다.

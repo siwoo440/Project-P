@@ -65,6 +65,17 @@
 
 `01_Title`은 장기 게임 상태를 보유하지 않는다. 버튼 이벤트는 `SceneFlow`에 전환을 요청만 한다.
 
+### 전역 서비스 접근
+- 전역 매니저는 `Bootstrapper`가 생성해 `GameServices`에 등록한다. 매니저에 `static Instance`를 두지 않는다.
+- 다른 코드는 `GameServices.Data` / `.Save` / `.Audio` / `.Game` / `.Scenes`로만 접근한다.
+- 초기화 순서: `DataManager` → `SaveManager` → `AudioManager` → `GameManager`·`SceneFlow` 등록 → 전환. 순서를 바꾸지 않는다.
+- Scene 이름은 문자열로 직접 쓰지 않고 `SceneNames` 상수를 쓴다.
+- Scene 간 `SessionData` 전달은 `GameManager.SetPendingSession` / `TakePendingSession`으로 한다.
+
+### 에디터 Play 동작
+- `EditorBootLoader`: 어느 Scene에서 Play해도 `00_Boot`를 먼저 거친 뒤 원래 Scene으로 돌아온다. 빌드에서는 동작하지 않는다.
+- 원래 Scene은 디스크에서 다시 불러온다. **Play 전에 Scene을 저장해야 변경이 반영된다.**
+
 ---
 
 ## 4. 저장 규칙
@@ -78,6 +89,12 @@
 전투 중간 상태는 저장하지 않는다. 게임 재실행 시 현재 방 진입 직전 상태에서 재개한다.
 
 **이어하기와 패배 재도전은 같은 메커니즘이다** — 둘 다 "방 진입 직전 `SessionData` 스냅샷"을 되감는다. 재도전용 사본은 Gameplay가 메모리에도 들고 있는다.
+
+### 저장 파일 처리
+- 위치: `Application.persistentDataPath`의 `save.json`(진행), `settings.json`(설정). **설정은 진행과 분리한다** — 새 게임으로 진행을 지워도 설정은 유지된다.
+- 쓰기는 임시 파일에 쓴 뒤 교체한다(원자적 쓰기).
+- 손상된 파일은 `.bak`으로 백업하고 새 데이터로 시작한다. 디스크에 쓸 수 없는 경우만 Boot를 멈춘다.
+- 직렬화는 `JsonUtility`를 쓴다. **JsonUtility는 커스텀 클래스 필드의 null을 보존하지 못한다** — 불러오면 빈 객체가 채워진다. 존재 여부는 null이 아니라 `bool` 플래그로 판정한다 (예: `SaveData.hasSuspendedSession`).
 
 ---
 
@@ -133,7 +150,7 @@
 
 - [x] **1일차** 기획·씬 구조 확정 — 이 문서가 산출물
 - [x] **2일차** Unity 프로젝트 기본 구조 — 폴더·Scene 7개·빌드 목록 등록 완료
-- [ ] **3일차** 00_Boot 및 전역 서비스
+- [ ] **3일차** 00_Boot 및 전역 서비스 — 구현·커밋 완료, Play 모드 검증 남음 (Devlogs/Day03 3.2)
 - [ ] 4일차 01_Title 및 Scene 전환
 - [ ] 5~10일차 퍼즐 프로토타입 (Dev_PuzzleTest)
 - [ ] 11~17일차 전투 프로토타입 (Dev_BattleTest)
