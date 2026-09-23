@@ -32,3 +32,7 @@ Thumbs.db
 # 크래시 리포트
 sysinfo.txt
 crashlytics-build.properties
+
+# Unity 크래시 복구 백업 (크래시 후 에디터를 열면 자동 생성)
+/[Aa]ssets/_Recovery/
+/[Aa]ssets/_Recovery.meta
